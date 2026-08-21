@@ -55,3 +55,6 @@ data/.quicktoken
 
 # Local database backups produced by scripts/clean-answer-bank.mjs
 *.db.backup-*
+
+# Gmail OAuth client + refresh token. Read-only scope, but still a credential.
+data/gmail.json

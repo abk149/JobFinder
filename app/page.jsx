@@ -789,10 +789,13 @@ export default function Dashboard() {
               )}
 
               {tab === 'inbox' && (
+                <>
+                <GmailPanel profileId={activeProfile.id} flash={flash} onUpdated={refreshJobViews} />
                 <InboxParser
                   profileId={activeProfile.id}
                   onUpdated={() => { loadJobs(); loadTracker(); flash('Pipeline updated.'); }}
                 />
+                </>
               )}
               {/* Live progress terminal — fixed at bottom of viewport, collapsible.
                   Subscribes to /api/logs/stream and shows what autofill/scan are doing. */}
@@ -1831,6 +1834,231 @@ function TerminalPanel({ profileId }) {
 // to match so generated letters still sound like you.
 // Per-job letter: generate, edit, copy. Cached on the job so autofill reuses exactly
 // what you approved here rather than writing something new into the form.
+// Gmail: connect once, then pull job-related mail and see what each message asks for.
+//
+// The connection is read-only and scoped, and the search is built from your own applied
+// companies — so unrelated mail is never requested. Both facts are stated in the UI,
+// because "we connected your inbox" is exactly the kind of thing that deserves to be
+// explicit rather than buried in a README.
+function GmailPanel({ profileId, flash, onUpdated }) {
+  const [status, setStatus] = useState(null);
+  const [emails, setEmails] = useState([]);
+  const [busy, setBusy] = useState('');
+  const [showSetup, setShowSetup] = useState(false);
+  const [clientId, setClientId] = useState('');
+  const [clientSecret, setClientSecret] = useState('');
+  const [days, setDays] = useState(45);
+  const [onlyAction, setOnlyAction] = useState(false);
+  const [open, setOpen] = useState(null);
+
+  const load = useCallback(async () => {
+    const r = await fetch(`/api/gmail?profile_id=${encodeURIComponent(profileId)}${onlyAction ? '&actionable=1' : ''}`)
+      .then((x) => x.json()).catch(() => null);
+    if (r?.ok) { setStatus(r.status); setEmails(r.emails || []); }
+  }, [profileId, onlyAction]);
+  useEffect(() => { load(); }, [load]);
+
+  const post = async (payload) => {
+    const r = await fetch('/api/gmail', {
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ profile_id: profileId, ...payload }),
+    }).then((x) => x.json()).catch((e) => ({ error: String(e?.message || e) }));
+    return r;
+  };
+
+  const saveClient = async () => {
+    setBusy('saving');
+    const r = await post({ action: 'save-client', client_id: clientId.trim(), client_secret: clientSecret.trim() });
+    setBusy('');
+    if (r.error) { flash(`Could not save: ${r.error}`); return; }
+    setClientId(''); setClientSecret('');          // don't keep the secret in component state
+    setStatus(r.status);
+    flash('Saved. Now click "Connect Gmail".');
+  };
+
+  const connect = async () => {
+    setBusy('auth');
+    const r = await post({ action: 'auth-url' });
+    setBusy('');
+    if (r.error || !r.url) { flash(r.error || 'Could not build the Google sign-in URL.'); return; }
+    window.open(r.url, '_blank', 'noopener');
+    flash('Approve access in the new tab, then come back and hit Check mail.');
+  };
+
+  const sync = async () => {
+    setBusy('sync');
+    const r = await post({ action: 'sync', days: Number(days) });
+    setBusy('');
+    if (r.error) { flash(`Sync failed: ${r.error}`); return; }
+    setEmails(r.emails || []);
+    await load();
+    flash(`${r.added} new · ${r.matched} matched to a job · ${r.needAction} need a reply.`);
+  };
+
+  const handled = async (id, v) => { await post({ action: 'handled', id, handled: v }); load(); };
+
+  const applyStage = async (e) => {
+    if (!e.job_id || !e.suggested_status) return;
+    await fetch('/api/tracker', {
+      method: 'PATCH', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ job_id: e.job_id, status: e.suggested_status }),
+    }).catch(() => {});
+    await handled(e.id, true);
+    flash(`Moved to ${e.suggested_status}.`);
+    onUpdated?.();
+  };
+
+  const STAGE_COLOR = {
+    rejected: '#f85149', screening: '#d29922', interview: '#58a6ff',
+    offer: '#3fb950', applied: '#8b949e', unknown: '#6e7681',
+  };
+
+  if (!status) return <div className="card muted">Checking mail connection…</div>;
+
+  return (
+    <>
+      <div className="card" style={{ borderColor: '#d29922', background: '#d2992209' }}>
+        <div className="row" style={{ justifyContent: 'space-between', alignItems: 'flex-start' }}>
+          <div>
+            <div className="label" style={{ color: '#e3b341' }}>
+              📬 Gmail {status.connected ? `— ${status.email}` : '(not connected)'}
+            </div>
+            <div className="muted" style={{ fontSize: 12, lineHeight: 1.6 }}>
+              {status.connected
+                ? <>Read-only access. Only messages matching your applied companies and recruiting
+                    terms are ever fetched. Revoke at{' '}
+                    <a href="https://myaccount.google.com/permissions" target="_blank" rel="noreferrer">
+                      myaccount.google.com/permissions</a>.
+                    {status.lastSync ? ` Last checked ${new Date(status.lastSync).toLocaleString()}.` : ''}</>
+                : <>Connect your mailbox so recruiter replies land here automatically, matched to the
+                    job they&apos;re about. Read-only — JobFinder can never send or delete mail.</>}
+            </div>
+          </div>
+          <div className="row">
+            {status.connected ? (
+              <>
+                <select value={days} onChange={(e) => setDays(e.target.value)} title="How far back to look">
+                  <option value={7}>7 days</option>
+                  <option value={30}>30 days</option>
+                  <option value={45}>45 days</option>
+                  <option value={90}>90 days</option>
+                </select>
+                <button className="primary" onClick={sync} disabled={busy === 'sync'}>
+                  {busy === 'sync' ? 'Checking…' : '📥 Check mail'}
+                </button>
+                <button className="danger" onClick={async () => {
+                  if (!confirm('Disconnect Gmail? Captured messages stay; the token is deleted.')) return;
+                  const r = await post({ action: 'disconnect' }); setStatus(r.status); flash('Disconnected.');
+                }}>Disconnect</button>
+              </>
+            ) : status.configured ? (
+              <button className="primary" onClick={connect} disabled={busy === 'auth'}>
+                {busy === 'auth' ? 'Opening…' : '🔗 Connect Gmail'}
+              </button>
+            ) : (
+              <button className="primary" onClick={() => setShowSetup(!showSetup)}>
+                {showSetup ? 'Hide setup' : 'Set up Gmail'}
+              </button>
+            )}
+          </div>
+        </div>
+
+        {(showSetup || (!status.configured && showSetup)) && (
+          <div style={{ marginTop: 12, borderTop: '1px solid #30363d', paddingTop: 12 }}>
+            <div className="muted" style={{ fontSize: 12.5, lineHeight: 1.7 }}>
+              Google requires every app to have its own credentials — there is no way around
+              this for a self-hosted tool. One-time, about five minutes:
+              <ol style={{ margin: '8px 0 8px 18px', padding: 0 }}>
+                <li>Open <a href="https://console.cloud.google.com/projectcreate" target="_blank" rel="noreferrer">console.cloud.google.com</a> and create a project.</li>
+                <li><strong>APIs &amp; Services → Library</strong> → enable <strong>Gmail API</strong>.</li>
+                <li><strong>OAuth consent screen</strong> → <em>External</em> → add yourself under <strong>Test users</strong>.</li>
+                <li><strong>Credentials → Create credentials → OAuth client ID → Web application</strong>.</li>
+                <li>Add this exact <strong>Authorised redirect URI</strong>:
+                  <code style={{ display: 'block', margin: '4px 0', color: '#58a6ff' }}>{status.redirectUri}</code>
+                </li>
+                <li>Copy the client ID and secret below.</li>
+              </ol>
+            </div>
+            <div className="col" style={{ gap: 6 }}>
+              <input value={clientId} onChange={(e) => setClientId(e.target.value)} placeholder="Client ID (…apps.googleusercontent.com)" />
+              <input value={clientSecret} onChange={(e) => setClientSecret(e.target.value)} placeholder="Client secret" type="password" />
+              <div className="row">
+                <button className="primary" onClick={saveClient} disabled={!clientId.trim() || !clientSecret.trim() || busy === 'saving'}>
+                  Save credentials
+                </button>
+                <span className="muted" style={{ fontSize: 12 }}>
+                  Stored locally in <code>data/gmail.json</code> (mode 0600), never sent anywhere but Google.
+                </span>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {status.connected && (
+        <div className="card" style={{ padding: 0 }}>
+          <div className="row" style={{ justifyContent: 'space-between', padding: '10px 12px' }}>
+            <div className="label">Captured messages ({emails.length})</div>
+            <label className="muted" style={{ cursor: 'pointer', fontSize: 12 }}>
+              <input type="checkbox" checked={onlyAction} onChange={(e) => setOnlyAction(e.target.checked)} style={{ width: 'auto', marginRight: 5 }} />
+              only ones needing a reply
+            </label>
+          </div>
+          <div style={{ maxHeight: 560, overflow: 'auto' }}>
+            {emails.length === 0 && (
+              <div className="muted" style={{ padding: 16 }}>
+                Nothing yet — hit “Check mail”.
+              </div>
+            )}
+            {emails.map((e) => (
+              <div key={e.id} style={{ borderTop: '1px solid #21262d', padding: '10px 12px', opacity: e.handled ? 0.55 : 1 }}>
+                <div className="row" style={{ justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                  <div style={{ flex: 1, cursor: 'pointer' }} onClick={() => setOpen(open === e.id ? null : e.id)}>
+                    <div>
+                      {e.category && (
+                        <span className="tag" style={{ color: STAGE_COLOR[e.category] || '#8b949e', marginRight: 6 }}>
+                          {e.category}
+                        </span>
+                      )}
+                      <strong>{e.subject || '(no subject)'}</strong>
+                    </div>
+                    <div className="muted" style={{ fontSize: 12 }}>
+                      {e.from_name || e.from_addr} · {new Date(e.received_at).toLocaleString()}
+                      {e.job_title ? ` · → ${e.job_title} @ ${e.job_company}` : ' · no matching job'}
+                    </div>
+                    {e.summary && <div style={{ fontSize: 13, marginTop: 4 }}>{e.summary}</div>}
+                    {e.asks?.length > 0 && (
+                      <div style={{ marginTop: 6, background: '#1f6feb14', borderLeft: '3px solid #1f6feb', padding: '6px 10px', borderRadius: 4 }}>
+                        <div style={{ fontSize: 11.5, color: '#58a6ff', fontWeight: 600 }}>They&apos;re asking you for</div>
+                        <ul style={{ margin: '4px 0 0 16px', padding: 0, fontSize: 13 }}>
+                          {e.asks.map((a, i) => <li key={i}>{a}</li>)}
+                        </ul>
+                      </div>
+                    )}
+                  </div>
+                  <div className="row">
+                    {e.job_id && e.suggested_status && e.job_status !== e.suggested_status && (
+                      <button className="primary" onClick={() => applyStage(e)} title={`Move that job to ${e.suggested_status}`}>
+                        → {e.suggested_status}
+                      </button>
+                    )}
+                    <button onClick={() => handled(e.id, !e.handled)}>{e.handled ? 'Reopen' : 'Done'}</button>
+                  </div>
+                </div>
+                {open === e.id && (
+                  <pre style={{ whiteSpace: 'pre-wrap', fontSize: 12.5, marginTop: 8, maxHeight: 300, overflow: 'auto', background: '#0d1117', padding: 10, borderRadius: 6 }}>
+                    {e.bodyPreview}
+                  </pre>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </>
+  );
+}
+
 function CoverLetterPanel({ job, onClose, flash }) {
   const [text, setText] = useState('');
   const [state, setState] = useState('loading');

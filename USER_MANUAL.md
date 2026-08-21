@@ -193,7 +193,37 @@ Change a stage from the main table or the Fresh panel; both stay in sync.
 
 ---
 
-## 5. Interview prep
+## 5. Mail: recruiter replies
+
+**Replies tab.** Two ways in, and the second stores nothing at all:
+
+**Connected (Gmail).** Read-only. Click *Check mail* and JobFinder searches only for
+messages matching the companies you've applied to plus recruiting vocabulary, within a
+window you choose. Each message is matched to the job it's about and read for meaning.
+
+What you see per message: the stage it implies (`screening`, `interview`, `offer`,
+`rejected`), a one-line summary, and — the part that matters most — **a separate list of
+everything HR is asking you for**, because those are what stall an application when one
+gets missed inside a paragraph. Any deadline is pulled out too.
+
+If the mail implies a stage change, a button appears (`→ screening`) that moves the job
+and marks the message done.
+
+*Setup is one-time and takes about five minutes:* Google requires every app to have its
+own OAuth credentials — unavoidable for a self-hosted tool. The panel walks you through
+creating a Google Cloud project, enabling the Gmail API, and pasting a client ID and
+secret. They're stored in `data/gmail.json` (mode 0600, gitignored) and go nowhere but
+Google.
+
+**What it can't do:** send, reply, delete, or read anything outside the search. Revoke
+whenever at [myaccount.google.com/permissions](https://myaccount.google.com/permissions).
+
+**Paste-in.** Don't want to connect a mailbox? Paste a reply into the box below the
+Gmail panel. Same parser, same stage suggestion, nothing stored, no credential involved.
+
+---
+
+## 6. Interview prep
 
 **Prep tab → Refresh.** It reads the job descriptions *you saved*, extracts the skills
 actually demanded, researches each, and writes study notes.
@@ -234,7 +264,7 @@ step. Run it overnight or while you work.
 
 ---
 
-## 6. When a site fights back
+## 7. When a site fights back
 
 **Safe Mode** relaunches Chrome with no debugging port at all — nothing attached, no
 automation of any kind. Logins persist. Use it if a human-verification step keeps failing.

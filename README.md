@@ -48,6 +48,9 @@ you to prove you're human.
 
 **After applying**
 - Pipeline tracker with stages, follow-up reminders and a funnel view
+- **Gmail (read-only, optional)** — recruiter replies are pulled in, matched to the job
+  they're about, and the specific things HR asks you for are listed separately so none
+  gets buried in a paragraph. One click moves the job to the stage the mail implies
 - **Interview prep** — reads your saved job descriptions, extracts the skills actually
   demanded, researches each one, and writes study notes with mental models, trade-offs,
   real numbers, level-by-level answers and cited sources
@@ -61,6 +64,10 @@ This is the design constraint, not a footnote.
   to the job boards themselves and the sources prep cites
 - **`data/` is gitignored in full** — database, résumés, cover letters, browser profiles,
   cookies. Nothing personal is in this repository, and nothing you add will be
+- **Gmail access is read-only and narrow.** The `gmail.readonly` scope cannot send,
+  delete or modify anything, and every sync runs a search built from your own applied
+  companies — unrelated mail is never requested, downloaded or stored. Revoke at
+  myaccount.google.com/permissions; the token lives in `data/gmail.json`, mode 0600
 - **Sensitive fields are never captured.** Passwords, CVV, SSN, OTP and similar are
   excluded at the point of capture, before anything is stored
 - **Honeypots and CAPTCHAs are never filled.** Completing an invisible field is a
