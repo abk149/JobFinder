@@ -180,6 +180,28 @@ export default function Dashboard() {
     }
   };
 
+  // Paste any job URL — including sources JobFinder doesn't scan. It opens in your
+  // Chrome, gets read into a normal job row, and is filled like any other.
+  const [pasteUrl, setPasteUrl] = useState('');
+  const [pasting, setPasting] = useState(false);
+
+  const importLink = async (mode) => {
+    const url = pasteUrl.trim();
+    if (!url || !activeProfile) return;
+    setPasting(true);
+    flash('Opening the link and reading the posting…');
+    const r = await fetch('/api/adhoc', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ profile_id: activeProfile.id, url, autofill: mode }),
+    }).then((x) => x.json()).catch((e) => ({ error: String(e?.message || e) }));
+    setPasting(false);
+    if (r.error) { flash(`Import failed: ${r.error}`); return; }
+    setPasteUrl('');
+    flash(r.message || 'Imported.');
+    await refreshJobViews();
+  };
+
   const apply = async (job) => {
     flash(`Opening ${job.title}…`);
     const r = await fetch('/api/apply', {
@@ -378,6 +400,38 @@ export default function Dashboard() {
 
               {tab === 'jobs' && (
                 <>
+                  {/* Paste a link from anywhere — a friend, a newsletter, a careers
+                      page. Scanning only ever covers the sources we have connectors for. */}
+                  <div className="card" style={{ borderColor: '#238636', background: '#2386360d' }}>
+                    <div className="label" style={{ color: '#3fb950' }}>🔗 Paste a job link</div>
+                    <div className="muted" style={{ fontSize: 12, marginBottom: 8 }}>
+                      Any posting, from any site — it doesn&apos;t have to be one JobFinder scans.
+                      It opens in your browser, gets read into your job list, and fills like the rest.
+                    </div>
+                    <div className="row">
+                      <input
+                        value={pasteUrl}
+                        onChange={(e) => setPasteUrl(e.target.value)}
+                        onKeyDown={(e) => { if (e.key === 'Enter' && !pasting) importLink('llm-fallback'); }}
+                        placeholder="https://careers.example.com/jobs/senior-engineer"
+                        style={{ flex: 1 }}
+                        disabled={pasting}
+                      />
+                      <button className="primary" onClick={() => importLink('llm-fallback')} disabled={pasting || !pasteUrl.trim()}>
+                        {pasting ? 'Working…' : 'Import + Autofill'}
+                      </button>
+                      <button
+                        onClick={() => importLink('llm-force')}
+                        disabled={pasting || !pasteUrl.trim()}
+                        title="Import, then let the LLM attempt every field on the page"
+                        style={{ background: '#8b5cf622', borderColor: '#8b5cf6', color: '#a78bfa' }}
+                      >Import + LLM Fill</button>
+                      <button onClick={() => importLink('none')} disabled={pasting || !pasteUrl.trim()} title="Just add it to the list and open it">
+                        Import only
+                      </button>
+                    </div>
+                  </div>
+
                   {/* One-time setup: drag this to the bookmarks bar, then you never
                       have to come back here mid-application. */}
                   <details className="card" style={{ borderColor: '#8b5cf6', background: '#8b5cf60d' }}>

@@ -46,6 +46,27 @@ and LinkedIn job cards don't publish one). Rather than pretend, each row states 
 
 Tick **confirmed dates only** to see just the first kind.
 
+### Pasting a link
+
+Not every job arrives through a connector. **Jobs tab → 🔗 Paste a job link** takes any
+URL — a friend's link, a newsletter, a company careers page — and turns it into a normal
+job row.
+
+| Button | What happens |
+|---|---|
+| **Import + Autofill** | Opens it, reads it, fills from your bank then the LLM |
+| **Import + LLM Fill** | Same, but the LLM attempts every field |
+| **Import only** | Adds it to your list and opens it; you fill when ready |
+
+It opens in **your** Chrome, so a posting behind a login or a bot check reads exactly as
+it does for you. Details come from the page's schema.org `JobPosting` data where present
+— that's what Google indexes, so most boards and every major ATS emit it — and the LLM
+reads the page text when they don't.
+
+Once imported it's an ordinary job: fit scoring, CV matching, cover letters, the tracker
+and the in-page toolbar all work on it. Pasting the same URL again updates that row
+rather than creating a duplicate.
+
 ### Fit scoring
 
 **🎯 Score fit** ranks every job against your CV, skills, level and locations, and

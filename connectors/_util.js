@@ -86,17 +86,31 @@ export function matchesKeywords(text, keywords) {
 // Strip HTML tags → plain text, collapse whitespace, cap length. Many JSON job
 // feeds return HTML in their description field; this makes it readable + storable.
 export function htmlToText(html, max = 2000) {
-  return String(html || '')
-    .replace(/<style[\s\S]*?<\/style>/gi, ' ')
-    .replace(/<script[\s\S]*?<\/script>/gi, ' ')
-    .replace(/<[^>]+>/g, ' ')
+  // Entities are decoded BEFORE tags are stripped, then tags are stripped again.
+  //
+  // The old order stripped first and decoded second, so markup that arrived escaped —
+  // which is exactly how schema.org JobPosting descriptions ship it, as &lt;p&gt; —
+  // survived stripping and then decoded into visible "<p>" litter in the job text.
+  // Decoding first turns it into real markup that the tag pass then removes.
+  const decoded = String(html || '')
     .replace(/&nbsp;/gi, ' ')
-    .replace(/&amp;/gi, '&')
     .replace(/&lt;/gi, '<')
     .replace(/&gt;/gi, '>')
-    .replace(/&#39;|&apos;/gi, "'")
+    .replace(/&#0?39;|&apos;/gi, "'")
     .replace(/&quot;/gi, '"')
-    .replace(/\s+/g, ' ')
+    .replace(/&#(\d+);/g, (_, d) => String.fromCharCode(Number(d)))
+    .replace(/&#x([0-9a-f]+);/gi, (_, h) => String.fromCharCode(parseInt(h, 16)))
+    .replace(/&amp;/gi, '&');   // last, so &amp;lt; doesn't become a tag
+
+  return decoded
+    .replace(/<style[\s\S]*?<\/style>/gi, ' ')
+    .replace(/<script[\s\S]*?<\/script>/gi, ' ')
+    .replace(/<\/(p|div|li|h[1-6]|tr)>/gi, '\n')   // keep paragraph breaks readable
+    .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/[ \t]+/g, ' ')
+    .replace(/\n{3,}/g, '\n\n')
+    .replace(/^\s+|\s+$/gm, '')
     .trim()
     .slice(0, max);
 }
@@ -107,6 +121,62 @@ export function htmlToText(html, max = 2000) {
 // browsers on "Scan All"). Returns null on any failure so connectors bail cleanly.
 const BROWSER_UA =
   'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36';
+
+// ── RSS / Atom ──────────────────────────────────────────────────────────────
+// Several remote-job boards are WordPress sites whose only stable machine-readable
+// surface is a feed. Shared here rather than copied per connector, because the fiddly
+// parts (CDATA, entity decoding, Atom's href-attribute links) are identical every time.
+
+const BROWSER_UA_RSS =
+  'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36';
+
+function decodeEntities(s) {
+  return String(s || '')
+    .replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, '$1')
+    .replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"').replace(/&apos;/g, "'").replace(/&nbsp;/g, ' ')
+    // Numeric entities too. WordPress feeds double-encode ampersands as &#038;, which
+    // otherwise shows up verbatim in job titles ("Data Science &#038; Engineering").
+    .replace(/&#(\d+);/g, (_, d) => String.fromCharCode(Number(d)))
+    .replace(/&#x([0-9a-f]+);/gi, (_, h) => String.fromCharCode(parseInt(h, 16)))
+    .trim();
+}
+
+/** Pull one tag's text out of a feed item. Handles CDATA and attributes. */
+export function feedTag(item, name) {
+  const m = item.match(new RegExp(`<${name}[^>]*>([\\s\\S]*?)</${name}>`, 'i'));
+  return m ? decodeEntities(m[1]) : '';
+}
+
+/** Atom puts the URL in an attribute (<link href="…"/>), RSS in the element body. */
+export function feedLink(item) {
+  const body = feedTag(item, 'link');
+  if (body && /^https?:/i.test(body)) return body;
+  const attr = item.match(/<link[^>]*href=["']([^"']+)["']/i);
+  return attr ? decodeEntities(attr[1]) : body;
+}
+
+/**
+ * Fetch a feed and return its raw <item>/<entry> chunks.
+ * Returns [] rather than throwing — a dead feed should cost one source, not the scan.
+ */
+export async function fetchFeedItems(url, { timeoutMs = 20000 } = {}) {
+  try {
+    const r = await fetch(url, {
+      headers: { 'User-Agent': BROWSER_UA_RSS, Accept: 'application/rss+xml, application/xml, text/xml, */*' },
+      signal: AbortSignal.timeout(timeoutMs),
+      redirect: 'follow',
+    });
+    if (!r.ok) return [];
+    const xml = await r.text();
+    const tag = /<item[\s>]/i.test(xml) ? 'item' : 'entry';
+    return xml
+      .split(new RegExp(`<${tag}[\\s>]`, 'i')).slice(1)
+      .map((chunk) => chunk.split(new RegExp(`</${tag}>`, 'i'))[0]);
+  } catch {
+    return [];
+  }
+}
 
 export async function fetchJson(url, { headers = {}, timeoutMs = 30000 } = {}) {
   try {

@@ -21,9 +21,13 @@ you to prove you're human.
 ## What it does
 
 **Finding work**
-- 19 connectors: Arbeitnow, Bluesky, Hacker News, Himalayas, Jobicy, LinkedIn,
-  LinkedIn Posts, Naukri, Otta, Psychology, Reddit, RemoteOK, Remotive, TechStartups,
-  The Muse, Wellfound, We Work Remotely, Working Nomads, Y Combinator
+- 21 connectors: Arbeitnow, Bluesky, Hacker News, Himalayas, Jobicy, Jobspresso,
+  LinkedIn, LinkedIn Posts, Naukri, NoDesk, Otta, Psychology, Reddit, RemoteOK,
+  Remotive, TechStartups, The Muse, Wellfound, We Work Remotely, Working Nomads,
+  Y Combinator
+- **Paste any link** — a posting from a site JobFinder doesn't scan becomes a normal
+  job: opened in your browser, read via schema.org JobPosting data (LLM fallback when
+  a page has none), then filled like any other
 - **Fit scoring** — ranks every posting against your CV, skills and locations.
   Deterministic and instant; no LLM
 - **Fresh this week** — everything posted in the last N days across all sources, newest

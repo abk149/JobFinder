@@ -21,11 +21,15 @@ import techstartups from './techstartups.js';
 import bluesky from './bluesky.js';
 import ycombinator from './ycombinator.js';
 import otta from './otta.js';
+import nodesk from './nodesk.js';
+import jobspresso from './jobspresso.js';
 
 // Order roughly by reliability: API-based sources first (no login, no CAPTCHA,
 // won't break on selector changes), then the login-gated / scraping connectors.
 export const CONNECTORS = [
   remotive,
+  nodesk,
+  jobspresso,
   remoteok,
   weworkremotely,
   ycombinator,
