@@ -2045,6 +2045,10 @@ function GmailPanel({ profileId, flash, onUpdated, onStatus }) {
   // Expanded when unconfigured: hiding first-run instructions behind an extra
   // click is how a feature ends up looking like it was never built.
   const [showSetup, setShowSetup] = useState(false);
+  const [showOauth, setShowOauth] = useState(false);
+  const [mailUser, setMailUser] = useState('');
+  const [mailPass, setMailPass] = useState('');
+  const [mailProvider, setMailProvider] = useState('gmail');
   useEffect(() => { if (status && !status.configured) setShowSetup(true); }, [status?.configured]);
   const [clientId, setClientId] = useState('');
   const [clientSecret, setClientSecret] = useState('');
@@ -2075,6 +2079,21 @@ function GmailPanel({ profileId, flash, onUpdated, onStatus }) {
     setClientId(''); setClientSecret('');          // don't keep the secret in component state
     setStatus(r.status);
     flash('Saved. Now click "Connect Gmail".');
+  };
+
+  const connectMail = async () => {
+    setBusy('mail');
+    const r = await post({
+      action: 'mail-connect',
+      user: mailUser.trim(),
+      pass: mailPass,
+      provider: mailProvider,
+    });
+    setBusy('');
+    if (!r.ok) { flash(r.error || 'Could not connect.'); return; }
+    setMailPass('');                       // don't keep the credential in component state
+    flash(`Connected ${r.mail.user}. Hit "Check mail".`);
+    load();
   };
 
   const connect = async () => {
@@ -2122,21 +2141,27 @@ function GmailPanel({ profileId, flash, onUpdated, onStatus }) {
         <div className="row" style={{ justifyContent: 'space-between', alignItems: 'flex-start' }}>
           <div>
             <div className="label" style={{ color: '#e3b341' }}>
-              📬 Gmail {status.connected ? `— ${status.email}` : '(not connected)'}
+              📬 Mailbox {status.connected ? `— ${status.email}` : status.mail?.connected ? `— ${status.mail.user}` : '(not connected)'}
             </div>
             <div className="muted" style={{ fontSize: 12, lineHeight: 1.6 }}>
               {status.connected
-                ? <>Read-only access. Only messages matching your applied companies and recruiting
-                    terms are ever fetched. Revoke at{' '}
+                ? <>{status.mail?.connected
+                      ? 'Connected over IMAP with an app password (full mailbox access — JobFinder only reads). '
+                      : 'Read-only OAuth access, enforced by Google. '}
+                    Only messages matching your applied companies and recruiting terms are ever
+                    fetched. Revoke at{' '}
                     <a href="https://myaccount.google.com/permissions" target="_blank" rel="noreferrer">
                       myaccount.google.com/permissions</a>.
                     {status.lastSync ? ` Last checked ${new Date(status.lastSync).toLocaleString()}.` : ''}</>
                 : <>Connect your mailbox so recruiter replies land here automatically, matched to the
-                    job they&apos;re about. Read-only — JobFinder can never send or delete mail.</>}
+                    job they&apos;re about. JobFinder only ever reads, and only messages matching your
+                    applied companies — but note the two options below differ: OAuth is read-only
+                    <em> enforced by Google</em>, while an app password grants full mailbox access and
+                    is trusted not to be misused.</>}
             </div>
           </div>
           <div className="row">
-            {status.connected ? (
+            {(status.connected || status.mail?.connected) ? (
               <>
                 <select value={days} onChange={(e) => setDays(e.target.value)} title="How far back to look">
                   <option value={7}>7 days</option>
@@ -2148,55 +2173,98 @@ function GmailPanel({ profileId, flash, onUpdated, onStatus }) {
                   {busy === 'sync' ? 'Checking…' : '📥 Check mail'}
                 </button>
                 <button className="danger" onClick={async () => {
-                  if (!confirm('Disconnect Gmail? Captured messages stay; the token is deleted.')) return;
-                  const r = await post({ action: 'disconnect' }); setStatus(r.status); flash('Disconnected.');
+                  if (!confirm('Disconnect the mailbox? Captured messages stay; the stored credential is deleted.')) return;
+                  await post({ action: status.mail?.connected ? 'mail-disconnect' : 'disconnect' });
+                  flash('Disconnected.');
+                  load();
                 }}>Disconnect</button>
               </>
-            ) : status.configured ? (
-              <button className="primary" onClick={connect} disabled={busy === 'auth'}>
-                {busy === 'auth' ? 'Opening…' : '🔗 Connect Gmail'}
-              </button>
-            ) : (
-              <button className="primary" onClick={() => setShowSetup(!showSetup)}>
-                {showSetup ? 'Hide setup' : 'Set up Gmail'}
-              </button>
-            )}
+            ) : null}
           </div>
         </div>
 
-        {(showSetup || (!status.configured && showSetup)) && (
+        {!(status.connected || status.mail?.connected) && (
           <div style={{ marginTop: 12, borderTop: '1px solid #30363d', paddingTop: 12 }}>
-            <div className="muted" style={{ fontSize: 12.5, lineHeight: 1.7 }}>
-              Google requires every app to have its own credentials — there is no way around
-              this for a self-hosted tool. One-time, about five minutes:
-              <ol style={{ margin: '8px 0 8px 18px', padding: 0 }}>
-                <li>Open <a href="https://console.cloud.google.com/projectcreate" target="_blank" rel="noreferrer">console.cloud.google.com</a> and create a project.</li>
-                <li><strong>APIs &amp; Services → Library</strong> → enable <strong>Gmail API</strong>.</li>
-                <li><strong>OAuth consent screen</strong> → <em>External</em> → add yourself under <strong>Test users</strong>.</li>
-                <li><strong>Credentials → Create credentials → OAuth client ID → Web application</strong>.</li>
-                <li>Add this exact <strong>Authorised redirect URI</strong>:
-                  <code style={{ display: 'block', margin: '4px 0', color: '#58a6ff' }}>{status.redirectUri}</code>
-                </li>
-                <li>Copy the client ID and secret below.</li>
+            <div className="label" style={{ color: '#3fb950' }}>Recommended — app password (about 2 minutes)</div>
+            <div className="muted" style={{ fontSize: 12.5, lineHeight: 1.7, marginBottom: 8 }}>
+              This is how mail clients have always connected. No Google Cloud project, nothing
+              to verify, and it does not expire.
+              <ol style={{ margin: '8px 0 4px 18px', padding: 0 }}>
+                <li>Turn on <strong>2-Step Verification</strong> if it is not already —
+                  the next step does not appear without it.</li>
+                <li>Open <a href="https://myaccount.google.com/apppasswords" target="_blank" rel="noreferrer">
+                  myaccount.google.com/apppasswords</a> and create one (call it “JobFinder”).</li>
+                <li>Paste the 16-character password below. Spaces do not matter.</li>
               </ol>
             </div>
-            <div className="col" style={{ gap: 6 }}>
-              <input value={clientId} onChange={(e) => setClientId(e.target.value)} placeholder="Client ID (…apps.googleusercontent.com)" />
-              <input value={clientSecret} onChange={(e) => setClientSecret(e.target.value)} placeholder="Client secret" type="password" />
-              <div className="row">
-                <button className="primary" onClick={saveClient} disabled={!clientId.trim() || !clientSecret.trim() || busy === 'saving'}>
-                  Save credentials
-                </button>
-                <span className="muted" style={{ fontSize: 12 }}>
-                  Stored locally in <code>data/gmail.json</code> (mode 0600), never sent anywhere but Google.
-                </span>
-              </div>
+            <div className="row">
+              <select value={mailProvider} onChange={(e) => setMailProvider(e.target.value)} style={{ maxWidth: 200 }}>
+                {(status.providers || [{ id: 'gmail', label: 'Gmail' }]).map((p) => (
+                  <option key={p.id} value={p.id}>{p.label}</option>
+                ))}
+              </select>
+              <input
+                value={mailUser}
+                onChange={(e) => setMailUser(e.target.value)}
+                placeholder="you@gmail.com"
+                autoComplete="username"
+              />
+              <input
+                value={mailPass}
+                onChange={(e) => setMailPass(e.target.value)}
+                placeholder="16-character app password"
+                type="password"
+                autoComplete="current-password"
+                onKeyDown={(e) => { if (e.key === 'Enter' && mailUser && mailPass) connectMail(); }}
+              />
+              <button className="primary" onClick={connectMail} disabled={busy === 'mail' || !mailUser.trim() || !mailPass}>
+                {busy === 'mail' ? 'Checking…' : 'Connect'}
+              </button>
+            </div>
+            <div className="muted" style={{ fontSize: 11.5, marginTop: 6 }}>
+              Verified against the mail server before anything is saved, then stored in
+              <code> data/mail.json</code> (mode 0600). It is never sent anywhere but your mail provider.
+              Revoke it any time from the same Google page.
+            </div>
+
+            <div style={{ marginTop: 14, borderTop: '1px solid #21262d', paddingTop: 10 }}>
+              <button onClick={() => setShowOauth(!showOauth)} style={{ background: 'transparent', border: 0, padding: 0, color: '#58a6ff' }}>
+                {showOauth ? '▾' : '▸'} Advanced: use Google OAuth instead (no password, but ~10 minutes of setup)
+              </button>
+              {showOauth && (
+                <div className="muted" style={{ fontSize: 12.5, lineHeight: 1.7, marginTop: 8 }}>
+                  OAuth needs its own Google Cloud project because Gmail&apos;s read scopes are
+                  <strong> restricted</strong> — Google only lets a verified app request them, and
+                  verification needs an annual third-party security assessment. A self-hosted tool
+                  cannot clear that, so there is no shared “Sign in with Google” button to offer.
+                  While the app stays in testing mode the token also expires every 7 days.
+                  <ol style={{ margin: '8px 0 8px 18px', padding: 0 }}>
+                    <li>Create a project at <a href="https://console.cloud.google.com/projectcreate" target="_blank" rel="noreferrer">console.cloud.google.com</a>.</li>
+                    <li><strong>APIs &amp; Services → Library</strong> → enable <strong>Gmail API</strong>.</li>
+                    <li><strong>OAuth consent screen</strong> → <em>External</em> → add yourself under <strong>Test users</strong>.</li>
+                    <li><strong>Credentials → OAuth client ID → Web application</strong>.</li>
+                    <li>Authorised redirect URI, exactly:
+                      <code style={{ display: 'block', margin: '4px 0', color: '#58a6ff' }}>{status.redirectUri}</code>
+                    </li>
+                  </ol>
+                  <div className="row">
+                    <input value={clientId} onChange={(e) => setClientId(e.target.value)} placeholder="Client ID (…apps.googleusercontent.com)" />
+                    <input value={clientSecret} onChange={(e) => setClientSecret(e.target.value)} placeholder="Client secret" type="password" />
+                    <button onClick={saveClient} disabled={!clientId.trim() || !clientSecret.trim() || busy === 'saving'}>Save</button>
+                    {status.configured && (
+                      <button className="primary" onClick={connect} disabled={busy === 'auth'}>
+                        {busy === 'auth' ? 'Opening…' : '🔗 Authorise'}
+                      </button>
+                    )}
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         )}
       </div>
 
-      {status.connected && (
+      {(status.connected || status.mail?.connected) && (
         <div className="card" style={{ padding: 0 }}>
           <div className="row" style={{ justifyContent: 'space-between', padding: '10px 12px' }}>
             <div className="label">Captured messages ({emails.length})</div>

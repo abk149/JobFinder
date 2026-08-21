@@ -218,9 +218,34 @@ hiring?") and staffing-vendor pitches are filtered out — mailing those is back
 
 **Replies tab.** Two ways in, and the second stores nothing at all:
 
-**Connected (Gmail).** Read-only. Click *Check mail* and JobFinder searches only for
-messages matching the companies you've applied to plus recruiting vocabulary, within a
-window you choose. Each message is matched to the job it's about and read for meaning.
+**Connected mailbox.** Click *Check mail* and JobFinder searches only for messages
+matching the companies you've applied to plus recruiting vocabulary, within a window you
+choose. Each message is matched to the job it's about and read for meaning.
+
+There are two ways to connect, and they differ in more than convenience:
+
+| | App password *(recommended)* | Google OAuth |
+|---|---|---|
+| Setup | ~2 minutes | ~10 minutes, needs a Google Cloud project |
+| Expiry | Never | **Every 7 days** while the app is unverified |
+| Access | Full mailbox (JobFinder only reads) | Read-only, enforced by Google |
+| Revoke | Google account → App passwords | Google account → Permissions |
+
+**Why there's no one-click "Sign in with Google":** Gmail's read scopes are classed by
+Google as *restricted*. Only a **verified** app may request them, and verification
+requires an annual third-party security assessment. No self-hosted tool can clear that
+bar, so a shared sign-in button is not available to anyone — which is exactly why mail
+clients have always used app passwords.
+
+**App password, step by step:**
+1. Turn on **2-Step Verification** — the app-password option does not appear without it.
+2. Go to [myaccount.google.com/apppasswords](https://myaccount.google.com/apppasswords)
+   and create one named "JobFinder".
+3. Paste the 16-character password into the Replies tab. Spaces don't matter.
+
+It's verified against the mail server before anything is saved, then stored in
+`data/mail.json` (mode 0600, gitignored). Outlook, Yahoo and iCloud work the same way —
+pick the provider from the dropdown.
 
 What you see per message: the stage it implies (`screening`, `interview`, `offer`,
 `rejected`), a one-line summary, and — the part that matters most — **a separate list of
@@ -229,15 +254,6 @@ gets missed inside a paragraph. Any deadline is pulled out too.
 
 If the mail implies a stage change, a button appears (`→ screening`) that moves the job
 and marks the message done.
-
-*Setup is one-time and takes about five minutes:* Google requires every app to have its
-own OAuth credentials — unavoidable for a self-hosted tool. The panel walks you through
-creating a Google Cloud project, enabling the Gmail API, and pasting a client ID and
-secret. They're stored in `data/gmail.json` (mode 0600, gitignored) and go nowhere but
-Google.
-
-**What it can't do:** send, reply, delete, or read anything outside the search. Revoke
-whenever at [myaccount.google.com/permissions](https://myaccount.google.com/permissions).
 
 **Paste-in.** Don't want to connect a mailbox? Paste a reply into the box below the
 Gmail panel. Same parser, same stage suggestion, nothing stored, no credential involved.

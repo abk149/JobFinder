@@ -58,3 +58,6 @@ data/.quicktoken
 
 # Gmail OAuth client + refresh token. Read-only scope, but still a credential.
 data/gmail.json
+
+# IMAP app password — a full-mailbox credential. Never commit.
+data/mail.json

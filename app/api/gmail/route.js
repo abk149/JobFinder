@@ -13,6 +13,7 @@
 
 import { get } from '../../../lib/db.js';
 import { gmailStatus, saveClient, authUrl, disconnectGmail } from '../../../lib/gmail.js';
+import { mailStatus, saveAndVerify, forgetMail, testConnection, PRESETS } from '../../../lib/imapMail.js';
 import { syncGmail, listEmails, markHandled, reanalyse } from '../../../lib/gmailSync.js';
 import { readJson, requireFields, withErrorHandling, HttpError } from '../../../lib/http.js';
 
@@ -26,7 +27,13 @@ export function redirectUriFor(req) {
 export const GET = withErrorHandling(async (req) => {
   const { searchParams } = new URL(req.url);
   const profile_id = searchParams.get('profile_id');
-  const status = { ...gmailStatus(), redirectUri: redirectUriFor(req) };
+  const status = {
+    ...gmailStatus(),
+    redirectUri: redirectUriFor(req),
+    mail: mailStatus(),
+    providers: Object.entries(PRESETS).map(([k, v]) => ({ id: k, ...v })),
+  };
+  status.anyConnected = status.connected || status.mail.connected;
   if (!profile_id) return Response.json({ ok: true, status, emails: [] });
   const emails = await listEmails(profile_id, {
     limit: Number(searchParams.get('limit')) || 60,
@@ -48,6 +55,32 @@ export const POST = withErrorHandling(async (req) => {
   if (action === 'auth-url') {
     const url = authUrl(redirectUriFor(req), body.profile_id || '');
     return Response.json({ ok: true, url });
+  }
+
+  // ── App-password path ──────────────────────────────────────────────────────
+  if (action === 'mail-connect') {
+    requireFields(body, ['user', 'pass']);
+    try {
+      const st = await saveAndVerify({
+        user: body.user, pass: body.pass,
+        provider: body.provider || 'gmail',
+        host: body.host, port: body.port,
+      });
+      return Response.json({ ok: true, mail: st });
+    } catch (e) {
+      // Credentials are only stored once the server accepts them, so a failure here
+      // leaves nothing behind to clean up.
+      return Response.json({ ok: false, error: String(e?.message || e).slice(0, 300) });
+    }
+  }
+
+  if (action === 'mail-test') {
+    const r = await testConnection();
+    return Response.json({ ok: r.ok, error: r.error, mailboxes: r.mailboxes });
+  }
+
+  if (action === 'mail-disconnect') {
+    return Response.json({ ok: true, mail: forgetMail() });
   }
 
   if (action === 'disconnect') {

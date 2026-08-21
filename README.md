@@ -51,9 +51,11 @@ you to prove you're human.
 
 **After applying**
 - Pipeline tracker with stages, follow-up reminders and a funnel view
-- **Gmail (read-only, optional)** — recruiter replies are pulled in, matched to the job
-  they're about, and the specific things HR asks you for are listed separately so none
-  gets buried in a paragraph. One click moves the job to the stage the mail implies
+- **Mailbox (optional)** — recruiter replies are pulled in, matched to the job they're
+  about, and the specific things HR asks you for are listed separately so none gets
+  buried in a paragraph. One click moves the job to the stage the mail implies.
+  Connect with an app password (2 minutes, works with Gmail/Outlook/Yahoo/iCloud) or
+  Google OAuth. Paste-in still works and stores nothing
 - **Interview prep** — reads your saved job descriptions, extracts the skills actually
   demanded, researches each one, and writes study notes with mental models, trade-offs,
   real numbers, level-by-level answers and cited sources
@@ -67,10 +69,11 @@ This is the design constraint, not a footnote.
   to the job boards themselves and the sources prep cites
 - **`data/` is gitignored in full** — database, résumés, cover letters, browser profiles,
   cookies. Nothing personal is in this repository, and nothing you add will be
-- **Gmail access is read-only and narrow.** The `gmail.readonly` scope cannot send,
-  delete or modify anything, and every sync runs a search built from your own applied
-  companies — unrelated mail is never requested, downloaded or stored. Revoke at
-  myaccount.google.com/permissions; the token lives in `data/gmail.json`, mode 0600
+- **Mail access is narrow.** Every sync runs a search built from your own applied
+  companies — unrelated mail is never requested, downloaded or stored. OAuth uses the
+  read-only `gmail.readonly` scope; an app password grants full mailbox access but
+  JobFinder only ever reads. Credentials live in `data/gmail.json` / `data/mail.json`,
+  mode 0600, gitignored, and are revocable from your Google account page
 - **The contact directory only reads text already fetched** for a posting. Nothing is
   crawled to find addresses, and none is ever guessed from a name-and-domain pattern.
   Job-seeker posts and staffing-vendor pitches are filtered out
