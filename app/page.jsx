@@ -415,7 +415,7 @@ export default function Dashboard() {
                         onChange={(e) => setPasteUrl(e.target.value)}
                         onKeyDown={(e) => { if (e.key === 'Enter' && !pasting) importLink('llm-fallback'); }}
                         placeholder="https://careers.example.com/jobs/senior-engineer"
-                        style={{ flex: 1 }}
+                        style={{ flex: '1 1 220px' }}
                         disabled={pasting}
                       />
                       <button className="primary" onClick={() => importLink('llm-fallback')} disabled={pasting || !pasteUrl.trim()}>
@@ -561,7 +561,7 @@ export default function Dashboard() {
                     </div>
 
                     {freshOpen && (
-                      <div style={{ marginTop: 10, maxHeight: 420, overflow: 'auto' }}>
+                      <div className="table-wrap" style={{ marginTop: 10, maxHeight: 420, overflowY: 'auto' }}>
                         {fresh.jobs.length === 0 ? (
                           <div className="muted" style={{ padding: 12 }}>
                             Nothing in this window yet. Hit “Scan All Sources”, or widen the range above.
@@ -574,7 +574,7 @@ export default function Dashboard() {
                             <tbody>
                               {fresh.jobs.map((j) => (
                                 <tr key={`fresh-${j.id}`}>
-                                  <td style={{ whiteSpace: 'nowrap' }}>
+                                  <td data-label="When" style={{ whiteSpace: 'nowrap' }}>
                                     <span style={{ color: j._fresh?.basis === 'posted' ? '#3fb950' : '#8b949e' }}>
                                       {shortAge(j._fresh?.at)}
                                     </span>
@@ -586,9 +586,9 @@ export default function Dashboard() {
                                     <a href={j.url} target="_blank" rel="noreferrer"><strong>{j.title}</strong></a>
                                     {j.location && <div className="muted" style={{ fontSize: 12 }}>{j.location}</div>}
                                   </td>
-                                  <td>{j.company}</td>
-                                  <td><span className="tag">{j.connector}</span></td>
-                                  <td>
+                                  <td data-label="Company">{j.company}</td>
+                                  <td data-label="Source"><span className="tag">{j.connector}</span></td>
+                                  <td data-label="Stage">
                                     <select
                                       className="stage-select"
                                       value={j.status}
@@ -604,7 +604,7 @@ export default function Dashboard() {
                                       </div>
                                     )}
                                   </td>
-                                  <td className="row">
+                                  <td data-label="Actions" className="row">
                                     <button className="primary" onClick={() => apply(j)} title="Open the job in Chrome and start the apply flow">Apply</button>
                                     <button onClick={() => autofill(j, 'llm-fallback')} title="Fill from your answer bank first; fall back to the LLM for anything it doesn't cover.">Autofill</button>
                                     <button
@@ -630,7 +630,8 @@ export default function Dashboard() {
                   {/* Pipeline funnel + overdue follow-ups */}
                   {tracker && <TrackerPanel tracker={tracker} onJump={(status) => setFilter({ ...filter, status })} />}
 
-                  <div className="card" style={{ padding: 0, overflow: 'auto' }}>
+                  <div className="card" style={{ padding: 0 }}>
+                    <div className="table-wrap">
                     <table>
                       <thead>
                         <tr>
@@ -666,8 +667,8 @@ export default function Dashboard() {
                                     </div>
                                   )}
                                 </td>
-                                <td>{j.company}</td>
-                                <td>{j.location}</td>
+                                <td data-label="Company">{j.company}</td>
+                                <td data-label="Location">{j.location}</td>
                                 <td>
                                   <span className="tag">{j.connector}</span>
                                   {dupes.length > 0 && (
@@ -676,7 +677,7 @@ export default function Dashboard() {
                                     </span>
                                   )}
                                 </td>
-                                <td>
+                                <td data-label="Stage">
                                   <select
                                     className="stage-select"
                                     value={j.status}
@@ -692,7 +693,7 @@ export default function Dashboard() {
                                     </div>
                                   )}
                                 </td>
-                                <td className="row">
+                                <td data-label="Actions" className="row">
                                   <button className="primary" onClick={() => apply(j)} title="Open the job in Chromium and trigger the apply flow">Apply</button>
                                   <button onClick={() => autofill(j, 'llm-fallback')} title="Fill from your answer bank first; fall back to LLM for any fields the bank doesn't cover.">Autofill</button>
                                   <button
@@ -733,6 +734,7 @@ export default function Dashboard() {
                         {visibleJobs.length === 0 && <tr><td colSpan={7} className="muted" style={{ padding: 16 }}>No jobs yet. Hit &quot;Scan All Sources&quot;.</td></tr>}
                       </tbody>
                     </table>
+                    </div>
                   </div>
                 </>
               )}
@@ -1086,7 +1088,7 @@ function CvVariants({ profileId }) {
 
       {variants.map((v) => (
         <div key={v.id} className="variant-row">
-          <div style={{ flex: 1 }}>
+          <div style={{ flex: '1 1 220px' }}>
             <div>
               <strong>{v.label}</strong>
               {v.isDefault && <span className="tag" style={{ marginLeft: 6 }}>fallback</span>}
@@ -1920,7 +1922,8 @@ function ContactsPanel({ profileId, flash }) {
         </div>
       </div>
 
-      <div className="card" style={{ padding: 0, overflow: 'auto' }}>
+      <div className="card" style={{ padding: 0 }}>
+        <div className="table-wrap">
         <table>
           <thead>
             <tr><th>Email</th><th>Name</th><th>Designation</th><th>Company</th><th>Source</th><th>Status</th><th></th></tr>
@@ -1929,13 +1932,13 @@ function ContactsPanel({ profileId, flash }) {
             {rows.map((c) => (
               <React.Fragment key={c.email}>
                 <tr>
-                  <td>
+                  <td data-label="Email">
                     <a href={`mailto:${c.email}`} style={{ fontWeight: 600 }}>{c.email}</a>
                     {c.kind === 'recruiting' && <span className="tag" style={{ marginLeft: 6, fontSize: 10 }}>inbox</span>}
                   </td>
-                  <td>{c.name || <span className="muted">—</span>}</td>
-                  <td>{c.designation || <span className="muted">—</span>}</td>
-                  <td>{c.company || <span className="muted">—</span>}</td>
+                  <td data-label="Name">{c.name || <span className="muted">—</span>}</td>
+                  <td data-label="Designation">{c.designation || <span className="muted">—</span>}</td>
+                  <td data-label="Company">{c.company || <span className="muted">—</span>}</td>
                   <td>
                     {c.source_url
                       ? <a href={c.source_url} target="_blank" rel="noreferrer" className="tag">{c.source_connector}</a>
@@ -1981,6 +1984,7 @@ function ContactsPanel({ profileId, flash }) {
             )}
           </tbody>
         </table>
+        </div>
       </div>
     </>
   );
@@ -2504,7 +2508,7 @@ function ProfileEditor({ profile, onChange, onSave, onDelete }) {
               placeholder="http://localhost:11434"
             />
           </div>
-          <div className="col" style={{ flex: 1 }}>
+          <div className="col" style={{ flex: '1 1 220px' }}>
             <label className="label">Model</label>
             <input
               value={filters.llm_model || ''}
@@ -2652,7 +2656,7 @@ function AnswerBank({ profileId }) {
             </div>
           </div>
 
-          <div style={{ marginTop: 10, maxHeight: 340, overflow: 'auto' }}>
+          <div className="table-wrap" style={{ marginTop: 10, maxHeight: 340, overflowY: 'auto' }}>
             <table>
               <thead>
                 <tr><th style={{ width: 30 }}></th><th>Field</th><th>Captured value</th><th></th></tr>
@@ -2728,7 +2732,8 @@ function AnswerBank({ profileId }) {
         </div>
       )}
 
-      <div className="card" style={{ padding: 0, overflow: 'auto' }}>
+      <div className="card" style={{ padding: 0 }}>
+        <div className="table-wrap">
         <table>
           <thead>
             <tr><th>Field</th><th>Value</th><th>Status</th><th>Hits</th><th></th></tr>
@@ -2760,6 +2765,7 @@ function AnswerBank({ profileId }) {
             )}
           </tbody>
         </table>
+        </div>
       </div>
     </div>
   );
