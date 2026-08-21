@@ -1,0 +1,22 @@
+{
+  "name": "jobfinder",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev -p 3737 -H 0.0.0.0",
+    "build": "next build",
+    "start": "next start -p 3737 -H 0.0.0.0",
+    "postinstall": "playwright install chromium firefox",
+    "install-launcher": "node scripts/install-launcher.js"
+  },
+  "dependencies": {
+    "better-sqlite3": "11.3.0",
+    "next": "14.2.5",
+    "pg": "8.13.0",
+    "playwright": "1.47.0",
+    "react": "18.3.1",
+    "react-dom": "18.3.1",
+    "rebrowser-playwright": "^1.52.0",
+    "zod": "3.23.8"
+  }
+}

@@ -1,0 +1,57 @@
+# Dependencies
+/node_modules
+/.pnp
+.pnp.js
+
+# Next.js build output
+/.next
+/out
+
+# Production
+/build
+
+# Local data — NEVER commit. Contains the SQLite DB, uploaded résumés, and
+# per-profile browser sessions (cookies, logged-in state, Cloudflare clearance).
+# These are private credentials and machine-specific; they must not be in git.
+/data
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Environment / secrets
+.env
+.env.local
+.env.*.local
+
+# Editor / OS cruft
+.DS_Store
+*.pem
+.idea
+.vscode
+*.swp
+
+# Misc
+/coverage
+data/.quicktoken
+
+# ── Added when preparing the public repo ────────────────────────────────────
+# Local agent/editor config: contains absolute paths from the machine it ran on.
+/.claude
+
+# Packaging artefacts. Large, generated, and machine-specific — rebuild with
+# `npm run build:windows` instead of committing binaries.
+/dist
+/installer
+*.exe
+*.zip
+
+# The toolbar's shared secret. Regenerated automatically on first run; committing
+# it would let any page that saw the repo drive a reader's local automation.
+data/.quicktoken
+.quicktoken
+
+# Local database backups produced by scripts/clean-answer-bank.mjs
+*.db.backup-*
