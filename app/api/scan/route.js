@@ -2,6 +2,7 @@
 // upserts found jobs into DB, returns per-connector counts.
 
 import crypto from 'node:crypto';
+import { harvestFromJob } from '../../../lib/contacts.js';
 import { get, run, all } from '../../../lib/db.js';
 import { getContext } from '../../../lib/browser.js';
 import { CONNECTORS, getConnector } from '../../../connectors/index.js';
@@ -42,6 +43,7 @@ export const POST = withErrorHandling(async (req) => {
       [runId, profile_id, c.id, startedAt]
     );
     let found = 0;      // rows actually inserted (genuinely new)
+    let contactsFound = 0;  // hiring addresses the ads printed themselves
     let fetched = 0;    // rows the source returned before keyword filtering
     let matched = 0;    // rows that survived keyword filtering
     let error = null;
@@ -87,7 +89,15 @@ export const POST = withErrorHandling(async (req) => {
               'new', Date.now(), canonicalJobKey(j) || null,
             ]
           );
-          if ((res?.changes ?? 1) > 0) found++;
+          if ((res?.changes ?? 1) > 0) {
+            found++;
+            // Harvest any hiring address the ad printed itself ("send your CV to …").
+            // Only on genuinely new rows, so re-scanning doesn't re-walk the archive.
+            try {
+              const c = await harvestFromJob(profile_id, j);
+              contactsFound += c.added;
+            } catch { /* a bad address must never fail a scan */ }
+          }
         } catch (e) {
           // ignore single-row errors
         }
@@ -121,9 +131,11 @@ export const POST = withErrorHandling(async (req) => {
       linfo(profile_id, `  = ${c.id}: ${matched} match(es), all already saved (${took}s)`);
     } else {
       const of = knowsFetched ? ` of ${fetched} offered` : '';
-      lok(profile_id, `  ✓ ${c.id}: ${found} new — ${matched} matched${of} (${took}s)`);
+      // Mention harvested contacts only when there are some — most sources publish none.
+      const contactNote = contactsFound ? ` · ${contactsFound} hiring contact${contactsFound === 1 ? '' : 's'}` : '';
+      lok(profile_id, `  ✓ ${c.id}: ${found} new — ${matched} matched${of}${contactNote} (${took}s)`);
     }
-    return { connector: c.id, found, fetched: knowsFetched ? fetched : null, matched, error };
+    return { connector: c.id, found, fetched: knowsFetched ? fetched : null, matched, contacts: contactsFound, error };
   }
 
   // pMap-style concurrency limiter for browser scans.

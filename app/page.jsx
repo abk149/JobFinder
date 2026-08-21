@@ -395,6 +395,7 @@ export default function Dashboard() {
                 <div className={`tab ${tab === 'answers' ? 'active' : ''}`} onClick={() => setTab('answers')}>Answer bank</div>
                 <div className={`tab ${tab === 'prep' ? 'active' : ''}`} onClick={() => setTab('prep')}>🎓 Interview Prep</div>
                 <div className={`tab ${tab === 'inbox' ? 'active' : ''}`} onClick={() => setTab('inbox')}>📧 Replies</div>
+                <div className={`tab ${tab === 'contacts' ? 'active' : ''}`} onClick={() => setTab('contacts')}>📇 Contacts</div>
                 <div className={`tab ${tab === 'profile' ? 'active' : ''}`} onClick={() => setTab('profile')}>Profile</div>
               </div>
 
@@ -787,6 +788,8 @@ export default function Dashboard() {
                   <MockInterview profileId={activeProfile.id} />
                 </>
               )}
+
+              {tab === 'contacts' && <ContactsPanel profileId={activeProfile.id} flash={flash} />}
 
               {tab === 'inbox' && (
                 <>
@@ -1834,6 +1837,155 @@ function TerminalPanel({ profileId }) {
 // to match so generated letters still sound like you.
 // Per-job letter: generate, edit, copy. Cached on the job so autofill reuses exactly
 // what you approved here rather than writing something new into the form.
+// Hiring contacts harvested from job ads — the addresses employers print themselves
+// next to "send your CV to". Editable, because an inferred name is a guess and a guess
+// in an outreach list is worse than a blank.
+function ContactsPanel({ profileId, flash }) {
+  const [rows, setRows] = useState([]);
+  const [q, setQ] = useState('');
+  const [status, setStatus] = useState('all');
+  const [busy, setBusy] = useState(false);
+  const [edit, setEdit] = useState(null);
+
+  const load = useCallback(async () => {
+    const p = new URLSearchParams({ profile_id: profileId, status });
+    if (q) p.set('q', q);
+    const r = await fetch(`/api/contacts?${p}`).then((x) => x.json()).catch(() => null);
+    setRows(r?.contacts || []);
+  }, [profileId, status, q]);
+  useEffect(() => { load(); }, [load]);
+
+  const backfill = async () => {
+    setBusy(true);
+    const r = await fetch('/api/contacts', {
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ profile_id: profileId, action: 'backfill' }),
+    }).then((x) => x.json()).catch((e) => ({ error: String(e?.message || e) }));
+    setBusy(false);
+    if (r.error) { flash(`Failed: ${r.error}`); return; }
+    flash(`${r.added} new, ${r.updated} already known — from ${r.scanned} posting(s).`);
+    load();
+  };
+
+  const patch = async (email, fields) => {
+    await fetch('/api/contacts', {
+      method: 'PATCH', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ profile_id: profileId, email, ...fields }),
+    }).catch(() => {});
+    load();
+  };
+
+  const remove = async (email) => {
+    if (!confirm(`Remove ${email} from the directory?`)) return;
+    await fetch(`/api/contacts?profile_id=${encodeURIComponent(profileId)}&email=${encodeURIComponent(email)}`, { method: 'DELETE' }).catch(() => {});
+    load();
+  };
+
+  const STATUS_COLOR = { new: '#8b949e', contacted: '#d29922', replied: '#3fb950', ignored: '#6e7681' };
+
+  return (
+    <>
+      <div className="card">
+        <div className="row" style={{ justifyContent: 'space-between', alignItems: 'flex-start' }}>
+          <div>
+            <div className="label">📇 Hiring contacts ({rows.length})</div>
+            <div className="muted" style={{ fontSize: 12, lineHeight: 1.6, maxWidth: 720 }}>
+              Addresses that job ads published themselves — “send your CV to …”. Captured
+              automatically as you scan. Nothing is crawled to find these and no address is
+              ever guessed from a name-and-domain pattern; they come from the posting text.
+              Only about 2% of ads include one, so this fills slowly. Hacker News “Who is
+              hiring” threads are by far the richest source.
+            </div>
+          </div>
+          <div className="row">
+            <button onClick={backfill} disabled={busy} title="Re-read job descriptions already saved">
+              {busy ? 'Scanning…' : '↻ Harvest from saved jobs'}
+            </button>
+            <a
+              className="btnlike"
+              href={`/api/contacts?profile_id=${encodeURIComponent(profileId)}&format=csv`}
+              style={{ display: 'inline-block', padding: '8px 12px', borderRadius: 7, background: '#23863622', border: '1px solid #238636', color: '#3fb950', textDecoration: 'none', fontWeight: 600, fontSize: 13 }}
+            >⬇ Export CSV</a>
+          </div>
+        </div>
+        <div className="row" style={{ marginTop: 10 }}>
+          <input placeholder="search email / name / company" value={q} onChange={(e) => setQ(e.target.value)} style={{ width: 280 }} />
+          <select value={status} onChange={(e) => setStatus(e.target.value)}>
+            <option value="all">all</option>
+            <option value="new">new</option>
+            <option value="contacted">contacted</option>
+            <option value="replied">replied</option>
+            <option value="ignored">ignored</option>
+          </select>
+        </div>
+      </div>
+
+      <div className="card" style={{ padding: 0, overflow: 'auto' }}>
+        <table>
+          <thead>
+            <tr><th>Email</th><th>Name</th><th>Designation</th><th>Company</th><th>Source</th><th>Status</th><th></th></tr>
+          </thead>
+          <tbody>
+            {rows.map((c) => (
+              <React.Fragment key={c.email}>
+                <tr>
+                  <td>
+                    <a href={`mailto:${c.email}`} style={{ fontWeight: 600 }}>{c.email}</a>
+                    {c.kind === 'recruiting' && <span className="tag" style={{ marginLeft: 6, fontSize: 10 }}>inbox</span>}
+                  </td>
+                  <td>{c.name || <span className="muted">—</span>}</td>
+                  <td>{c.designation || <span className="muted">—</span>}</td>
+                  <td>{c.company || <span className="muted">—</span>}</td>
+                  <td>
+                    {c.source_url
+                      ? <a href={c.source_url} target="_blank" rel="noreferrer" className="tag">{c.source_connector}</a>
+                      : <span className="tag">{c.source_connector || '—'}</span>}
+                  </td>
+                  <td>
+                    <select value={c.status || 'new'} onChange={(e) => patch(c.email, { status: e.target.value })}
+                      style={{ color: STATUS_COLOR[c.status] || '#8b949e' }}>
+                      {['new', 'contacted', 'replied', 'ignored'].map((sv) => <option key={sv} value={sv}>{sv}</option>)}
+                    </select>
+                  </td>
+                  <td className="row">
+                    <button onClick={() => setEdit(edit === c.email ? null : c.email)}>Edit</button>
+                    <button className="danger" onClick={() => remove(c.email)}>✗</button>
+                  </td>
+                </tr>
+                {edit === c.email && (
+                  <tr>
+                    <td colSpan={7} style={{ background: '#0d1117', padding: 12 }}>
+                      {c.context && (
+                        <div className="muted" style={{ fontSize: 12, marginBottom: 8 }}>
+                          Found in: “{c.context}”
+                        </div>
+                      )}
+                      <div className="row">
+                        {['name', 'designation', 'company'].map((f) => (
+                          <input key={f} defaultValue={c[f] || ''} placeholder={f}
+                            onBlur={(e) => { if (e.target.value !== (c[f] || '')) patch(c.email, { [f]: e.target.value }); }} />
+                        ))}
+                      </div>
+                      <textarea rows={2} defaultValue={c.notes || ''} placeholder="notes"
+                        style={{ marginTop: 6, width: '100%' }}
+                        onBlur={(e) => { if (e.target.value !== (c.notes || '')) patch(c.email, { notes: e.target.value }); }} />
+                    </td>
+                  </tr>
+                )}
+              </React.Fragment>
+            ))}
+            {rows.length === 0 && (
+              <tr><td colSpan={7} className="muted" style={{ padding: 16 }}>
+                Nothing yet. Scan some jobs, or hit “Harvest from saved jobs” to read the ones you already have.
+              </td></tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+    </>
+  );
+}
+
 // Gmail: connect once, then pull job-related mail and see what each message asks for.
 //
 // The connection is read-only and scoped, and the search is built from your own applied

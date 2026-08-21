@@ -193,7 +193,28 @@ Change a stage from the main table or the Fresh panel; both stay in sync.
 
 ---
 
-## 5. Mail: recruiter replies
+## 5. Contacts directory
+
+**Contacts tab.** Job ads sometimes print a hiring address — "send your CV to
+careers@…", "reach out to lukasz@…". Scanning captures those into a directory with the
+company and, where the ad states them, a name and designation. Editable inline, filter
+by status (new → contacted → replied → ignored), and **Export CSV** for a mail merge.
+
+**↻ Harvest from saved jobs** re-reads postings you saved before the feature existed.
+
+Set expectations: only about **2% of ads include an address**, and on a 1,232-posting
+database that yielded 26. Hacker News "Who is hiring" threads are by far the richest
+source, since a contact line is the convention there. This is a slow-filling,
+high-quality list rather than a bulk one.
+
+**What it does not do:** it never crawls anywhere to find addresses, and never guesses
+one from a name-and-domain pattern. Everything comes from text already fetched for the
+posting. Job-seeker posts (Hacker News runs "Who wants to be hired?" alongside "Who is
+hiring?") and staffing-vendor pitches are filtered out — mailing those is backwards.
+
+---
+
+## 6. Mail: recruiter replies
 
 **Replies tab.** Two ways in, and the second stores nothing at all:
 
@@ -223,7 +244,7 @@ Gmail panel. Same parser, same stage suggestion, nothing stored, no credential i
 
 ---
 
-## 6. Interview prep
+## 7. Interview prep
 
 **Prep tab → Refresh.** It reads the job descriptions *you saved*, extracts the skills
 actually demanded, researches each, and writes study notes.
@@ -264,7 +285,7 @@ step. Run it overnight or while you work.
 
 ---
 
-## 7. When a site fights back
+## 8. When a site fights back
 
 **Safe Mode** relaunches Chrome with no debugging port at all — nothing attached, no
 automation of any kind. Logins persist. Use it if a human-verification step keeps failing.

@@ -34,6 +34,9 @@ you to prove you're human.
   first, with an honest distinction between "the source published this date" and
   "this is when we first saw it"
 - Cross-board de-duplication: the same role scraped from four sites collapses to one
+- **Hiring-contact directory** — addresses that ads publish themselves ("send your CV
+  to …") are captured during scanning into an editable, CSV-exportable directory with
+  company and, where stated, name and designation
 
 **Applying**
 - **Answer bank** — captures what you type into application forms and replays it. New
@@ -68,6 +71,9 @@ This is the design constraint, not a footnote.
   delete or modify anything, and every sync runs a search built from your own applied
   companies — unrelated mail is never requested, downloaded or stored. Revoke at
   myaccount.google.com/permissions; the token lives in `data/gmail.json`, mode 0600
+- **The contact directory only reads text already fetched** for a posting. Nothing is
+  crawled to find addresses, and none is ever guessed from a name-and-domain pattern.
+  Job-seeker posts and staffing-vendor pitches are filtered out
 - **Sensitive fields are never captured.** Passwords, CVV, SSN, OTP and similar are
   excluded at the point of capture, before anything is stored
 - **Honeypots and CAPTCHAs are never filled.** Completing an invisible field is a
