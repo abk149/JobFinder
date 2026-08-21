@@ -29,6 +29,19 @@ export default function Dashboard() {
   const [freshDays, setFreshDays] = useState(7);
   const [freshStrict, setFreshStrict] = useState(false);
   const [tab, setTab] = useState('jobs');
+  // Gmail state lives here, not only inside the Replies tab. Buried one tab deep with
+  // no signal anywhere else, the integration was effectively invisible — the first
+  // question after building it was "where is it?".
+  const [gmail, setGmail] = useState(null);
+  const [gmailPending, setGmailPending] = useState(0);
+
+  const loadGmail = useCallback(async () => {
+    if (!activeProfile) return;
+    const r = await fetch(`/api/gmail?profile_id=${encodeURIComponent(activeProfile.id)}&actionable=1`)
+      .then((x) => x.json()).catch(() => null);
+    if (r?.ok) { setGmail(r.status); setGmailPending((r.emails || []).length); }
+  }, [activeProfile]);
+  useEffect(() => { loadGmail(); }, [loadGmail]);
   const [toast, setToast] = useState(null);
   const [scanning, setScanning] = useState(false);
   const [filter, setFilter] = useState({ status: '', connector: '', q: '' });
@@ -363,6 +376,28 @@ export default function Dashboard() {
               🛡️ Safe Mode
             </button>
           )}
+          {activeProfile && (
+            <button
+              onClick={() => setTab('inbox')}
+              title={
+                gmail?.connected
+                  ? `Gmail connected as ${gmail.email}. Read-only. Click to open Replies.`
+                  : 'Connect Gmail (read-only) so recruiter replies land in JobFinder. Click to set it up.'
+              }
+              style={
+                gmail?.connected
+                  ? { background: '#23863622', borderColor: '#238636', color: '#3fb950', fontWeight: 600 }
+                  : { background: '#d2992222', borderColor: '#d29922', color: '#e3b341', fontWeight: 600 }
+              }
+            >
+              📬 {gmail?.connected ? 'Gmail' : 'Connect Gmail'}
+              {gmail?.connected && gmailPending > 0 && (
+                <span className="tag" style={{ background: '#d2992233', color: '#e3b341', marginLeft: 2 }}>
+                  {gmailPending}
+                </span>
+              )}
+            </button>
+          )}
           <div className="muted">storage: {backend} {backend === 'timescale' ? '(TimescaleDB)' : '(local)'} </div>
         </div>
       </div>
@@ -394,7 +429,14 @@ export default function Dashboard() {
                 <div className={`tab ${tab === 'sources' ? 'active' : ''}`} onClick={() => setTab('sources')}>Sources</div>
                 <div className={`tab ${tab === 'answers' ? 'active' : ''}`} onClick={() => setTab('answers')}>Answer bank</div>
                 <div className={`tab ${tab === 'prep' ? 'active' : ''}`} onClick={() => setTab('prep')}>🎓 Interview Prep</div>
-                <div className={`tab ${tab === 'inbox' ? 'active' : ''}`} onClick={() => setTab('inbox')}>📧 Replies</div>
+                <div className={`tab ${tab === 'inbox' ? 'active' : ''}`} onClick={() => setTab('inbox')}>
+                  📧 Replies
+                  {gmailPending > 0 && (
+                    <span className="tag" style={{ background: '#d2992233', color: '#e3b341', marginLeft: 6 }}>
+                      {gmailPending}
+                    </span>
+                  )}
+                </div>
                 <div className={`tab ${tab === 'contacts' ? 'active' : ''}`} onClick={() => setTab('contacts')}>📇 Contacts</div>
                 <div className={`tab ${tab === 'profile' ? 'active' : ''}`} onClick={() => setTab('profile')}>Profile</div>
               </div>
@@ -795,7 +837,7 @@ export default function Dashboard() {
 
               {tab === 'inbox' && (
                 <>
-                <GmailPanel profileId={activeProfile.id} flash={flash} onUpdated={refreshJobViews} />
+                <GmailPanel profileId={activeProfile.id} flash={flash} onUpdated={refreshJobViews} onStatus={loadGmail} />
                 <InboxParser
                   profileId={activeProfile.id}
                   onUpdated={() => { loadJobs(); loadTracker(); flash('Pipeline updated.'); }}
@@ -1996,11 +2038,14 @@ function ContactsPanel({ profileId, flash }) {
 // companies — so unrelated mail is never requested. Both facts are stated in the UI,
 // because "we connected your inbox" is exactly the kind of thing that deserves to be
 // explicit rather than buried in a README.
-function GmailPanel({ profileId, flash, onUpdated }) {
+function GmailPanel({ profileId, flash, onUpdated, onStatus }) {
   const [status, setStatus] = useState(null);
   const [emails, setEmails] = useState([]);
   const [busy, setBusy] = useState('');
+  // Expanded when unconfigured: hiding first-run instructions behind an extra
+  // click is how a feature ends up looking like it was never built.
   const [showSetup, setShowSetup] = useState(false);
+  useEffect(() => { if (status && !status.configured) setShowSetup(true); }, [status?.configured]);
   const [clientId, setClientId] = useState('');
   const [clientSecret, setClientSecret] = useState('');
   const [days, setDays] = useState(45);
@@ -2010,8 +2055,8 @@ function GmailPanel({ profileId, flash, onUpdated }) {
   const load = useCallback(async () => {
     const r = await fetch(`/api/gmail?profile_id=${encodeURIComponent(profileId)}${onlyAction ? '&actionable=1' : ''}`)
       .then((x) => x.json()).catch(() => null);
-    if (r?.ok) { setStatus(r.status); setEmails(r.emails || []); }
-  }, [profileId, onlyAction]);
+    if (r?.ok) { setStatus(r.status); setEmails(r.emails || []); onStatus?.(); }
+  }, [profileId, onlyAction, onStatus]);
   useEffect(() => { load(); }, [load]);
 
   const post = async (payload) => {
