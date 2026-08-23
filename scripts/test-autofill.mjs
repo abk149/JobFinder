@@ -8,7 +8,7 @@ import crypto from 'node:crypto';
 (async () => {
   const { getContext } = await import('../lib/browser.js');
   const { autofillContext } = await import('../lib/autofill.js');
-  const { recordAnswer } = await import('../lib/answerBank.js');
+  const { recordAnswer, reviewAllPending } = await import('../lib/answerBank.js');
   const { retrieve, backfillEmbeddings } = await import('../lib/knowledge.js');
   const { run } = await import('../lib/db.js');
 
@@ -18,7 +18,7 @@ import crypto from 'node:crypto';
     keywords: 'backend, distributed systems, golang', locations: 'Remote',
     filters: JSON.stringify({
       bio: '7 years building distributed payment systems at scale. Led a 5-engineer team rewriting the core ledger in Go.',
-      llm_model: 'deepseek-r1:8b',
+      llm_model: 'qwen2.5:7b-instruct',
     }),
   };
   const job = {
@@ -32,6 +32,10 @@ import crypto from 'node:crypto';
   await recordAnswer(profileId, { field_key: 'years of experience', label: 'Years of experience', value: '7', type: 'text' });
   await recordAnswer(profileId, { field_key: 'notice period in days', label: 'Notice period in days', value: '30', type: 'text' });
   await recordAnswer(profileId, { field_key: 'expected salary', label: 'Expected salary (USD)', value: '180000', type: 'text' });
+  // Newly captured answers land as 'pending', and retrieval reads approved rows only —
+  // that gate is the whole point of the review queue. A test that skips it is testing
+  // nothing, because every seeded answer would be invisible to retrieve().
+  await reviewAllPending(profileId, 'approved');
   await new Promise(r => setTimeout(r, 3000));
   await backfillEmbeddings(profile);
 
@@ -82,7 +86,17 @@ import crypto from 'node:crypto';
   await run('DELETE FROM answers WHERE profile_id = ?', [profileId]);
   await run('DELETE FROM profiles WHERE id = ?', [profileId]);
 
-  const pass = sevenFound && values.yrs === '7' && values.notice === '30' && values.comp === '180000' && (values.why || '').length > 50;
+  // The salary field is filled by the LLM, not the bank: "Compensation Expectation" vs
+  // "Expected salary (USD)" scores 0.414, under the verbatim bar, and the bar cannot be
+  // lowered to catch it without readmitting false matches (which reach 0.458 on a real
+  // bank). So compare the NUMBER, not its formatting — "$180,000" is the right answer
+  // presented differently. Digits still have to match exactly, so a wrong figure fails.
+  const digits = (v) => String(v || '').replace(/[^0-9]/g, '');
+  const pass = sevenFound
+    && values.yrs === '7'
+    && values.notice === '30'
+    && digits(values.comp) === '180000'
+    && (values.why || '').length > 50;
   console.log('\n' + (pass ? '✅ PIPELINE WORKS END-TO-END' : '❌ Pipeline broken'));
   process.exit(pass ? 0 : 1);
 })().catch((e) => { console.error('FATAL:', e); process.exit(2); });

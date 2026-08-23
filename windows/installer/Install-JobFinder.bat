@@ -101,7 +101,7 @@ echo.
 echo   [4/4] AI models
 if not defined OLLAMA_EXE (
     echo         Ollama not available - skipping models.
-    echo         Once you install it, run:  ollama pull deepseek-r1:8b
+    echo         Once you install it, run:  ollama pull qwen2.5:7b-instruct
 ) else (
     powershell -NoProfile -ExecutionPolicy Bypass -File "%DEST%\scripts\post-install-models.ps1"
 )

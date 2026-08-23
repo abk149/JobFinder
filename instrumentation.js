@@ -17,6 +17,8 @@ export async function register() {
   // ~10 GB of models on a box that had 3.2 GB free — which is what an Ollama stall
   // looks like from the outside (model resident, runner at 3.7% CPU, generating
   // nothing). It loads on first use instead; that costs a few seconds once.
+  // Chat and synthesis now resolve to the same instruct model, so the warmup pins one
+  // model rather than two — which is what keeps a 16GB machine off the swap.
   let synth = '(auto)';
   try {
     const { resolveSynthModel } = await import('./lib/llm.js');

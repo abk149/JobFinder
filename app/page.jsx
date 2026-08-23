@@ -1631,7 +1631,7 @@ function InterviewPrep({ profileId, flash }) {
         </div>
         {vision && !vision.available && (
           <div className="muted" style={{ marginTop: 10, borderTop: '1px solid #30363d', paddingTop: 8 }}>
-            🖼 Image extraction is off — no vision model installed. Your chat model (deepseek-r1) is text-only.
+            🖼 Image extraction is off — no vision model installed. Your chat model (qwen2.5) is text-only.
             To read screenshots and diagrams found in posts, run:{' '}
             <code style={{ color: '#d29922' }}>ollama pull moondream</code>
           </div>
@@ -2626,7 +2626,7 @@ function ProfileEditor({ profile, onChange, onSave, onDelete }) {
             <input
               value={filters.llm_model || ''}
               onChange={(e) => setFilter('llm_model', e.target.value)}
-              placeholder="deepseek-r1"
+              placeholder="qwen2.5:7b-instruct"
             />
           </div>
           <button onClick={checkLLM} style={{ alignSelf: 'flex-end' }}>Test connection</button>

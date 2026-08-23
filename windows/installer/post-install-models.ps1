@@ -10,9 +10,9 @@
 
 [CmdletBinding()]
 param(
-    [string]$Model     = 'deepseek-r1:8b',
+    [string]$Model     = 'qwen2.5:7b-instruct',
     [string]$SynthModel = 'qwen2.5:7b-instruct',
-    [string]$EmbedModel = 'nomic-embed-text',
+    [string]$EmbedModel = 'all-minilm',
     [switch]$SkipSynth
 )
 

@@ -96,7 +96,7 @@ git clone https://github.com/abk149/JobFinder.git
 cd JobFinder
 npm install
 ollama pull qwen2.5:7b-instruct
-ollama pull nomic-embed-text
+ollama pull all-minilm
 npm run build
 npm start
 ```
@@ -119,8 +119,16 @@ call that commercial bot-detectors fingerprint, plus an init script covering
 `scripts/test-stealth.mjs` asserts 23 fingerprint probes.
 
 **Retrieval.** Answers are matched by exact key first, then by cosine similarity over
-`nomic-embed-text` embeddings, and only then handed to the LLM — which is told to return
+`all-minilm` embeddings, and only then handed to the LLM — which is told to return
 a literal `[BLANK]` rather than invent a phone number.
+
+The embedding model was chosen by measurement, not reputation. `nomic-embed-text` — the
+obvious default, and what this project shipped with — produces vectors dominated by a
+single component that barely varies with the text, so cosine measures almost nothing: it
+scored the unrelated pair *"Expected CTC"* / *"City: Berlin"* at **1.000** and got 1 of 8
+answerable questions right. `all-minilm` gets 8 of 10 on the same bank, is 6x smaller, and
+keeps every question the bank *cannot* answer below the verbatim-fill threshold, so those
+fall through to the LLM instead of being confidently filled with the wrong value.
 
 ## Project layout
 

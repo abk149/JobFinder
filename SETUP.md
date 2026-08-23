@@ -41,7 +41,7 @@ hook. That's a few hundred MB and takes a minute or two.
 
 ```bash
 ollama pull qwen2.5:7b-instruct   # synthesis: prep, cover letters  (~4.7 GB)
-ollama pull nomic-embed-text      # embeddings for semantic matching (~0.3 GB)
+ollama pull all-minilm            # embeddings for semantic matching (~46 MB)
 ```
 
 **On model choice.** Interview prep and cover letters need an **instruct** model, not a
@@ -57,6 +57,20 @@ configure anything. Preference order:
 ```
 qwen2.5:7b-instruct → qwen2.5:14b-instruct → llama3.1:8b → mistral:7b-instruct
 ```
+
+**On the embedding model.** `all-minilm` rather than the more popular
+`nomic-embed-text`, because the popular one does not work for this task. Form questions
+are short ("Expected CTC", "Notice period"), and on short text nomic returns vectors
+dominated by one large component that hardly moves with the wording. Cosine then compares
+almost nothing: measured against a real 35-answer bank it rated *"Expected CTC"* against
+*"City: Berlin"* at **1.000** and picked the right answer for 1 of 8 answerable
+questions. `all-minilm` gets 8 of 10, and — more importantly — keeps unanswerable
+questions well below the fill threshold so they go to the LLM instead of being filled
+with a confident wrong value.
+
+If you switch embedding models, click **Reindex bank** (or restart): vectors from
+different models are not comparable, and JobFinder re-embeds any whose dimension no
+longer matches the live model.
 
 **On memory.** Each 7–8B model is ~5 GB resident. On a 16 GB machine, running two
 alongside Chrome causes swapping, which looks exactly like a hang: the model stays
@@ -75,7 +89,7 @@ npm start
 Open <http://localhost:3737>. On startup you should see:
 
 ```
-[JobFinder] Preloading Ollama models: chat=…, embed=nomic-embed-text
+[JobFinder] Preloading Ollama models: chat=…, embed=all-minilm
 [JobFinder] Prep/cover-letter synthesis will use: qwen2.5:7b-instruct (loaded on first use)
 [JobFinder] LLM warmup: ✅ chat · ✅ embed
 ```
@@ -137,8 +151,8 @@ Environment variables — all optional:
 | Variable | Default | Purpose |
 |---|---|---|
 | `OLLAMA_URL` | `http://127.0.0.1:11434` | Ollama endpoint |
-| `OLLAMA_MODEL` | `deepseek-r1:8b` | Chat model (autofill drafting) |
-| `OLLAMA_EMBED_MODEL` | `nomic-embed-text` | Embedding model |
+| `OLLAMA_MODEL` | `qwen2.5:7b-instruct` | Chat model (autofill drafting) |
+| `OLLAMA_EMBED_MODEL` | `all-minilm` | Embedding model |
 | `JOBFINDER_LLM_TIMEOUT_MS` | `240000` | Per-call LLM deadline |
 | `JOBFINDER_TOOLBAR_KEEPER` | on | `0` disables the persistent toolbar session |
 | `JOBFINDER_STANDALONE` | off | `1` for Windows packaging only |
