@@ -8,9 +8,9 @@
     "start": "next start -p 3737 -H 0.0.0.0",
     "postinstall": "playwright install chromium firefox",
     "install-launcher": "node scripts/install-launcher.js",
-    "build:windows": "node scripts/build-windows.js",
-    "verify:windows": "node scripts/verify-windows-build.js",
-    "make:icon": "node scripts/make-icon.js"
+    "build:windows": "node windows/build.js",
+    "verify:windows": "node windows/verify.js",
+    "make:icon": "node windows/make-icon.js"
   },
   "dependencies": {
     "better-sqlite3": "11.3.0",

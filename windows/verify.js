@@ -12,8 +12,7 @@
 const fs = require('node:fs');
 const path = require('node:path');
 
-const ROOT = path.resolve(__dirname, '..');
-const DIST = path.join(ROOT, 'dist', 'windows');
+const DIST = path.join(__dirname, 'dist', 'JobFinder');
 const APP = path.join(DIST, 'app');
 
 const problems = [];
@@ -24,7 +23,7 @@ function isWindowsBinary(p) {
 }
 
 if (!fs.existsSync(APP)) {
-  console.error('✗ dist/windows/app does not exist — run: node scripts/build-windows.js');
+  console.error('✗ windows/dist/JobFinder/app does not exist — run: npm run build:windows');
   process.exit(1);
 }
 
@@ -93,7 +92,7 @@ ok.push('no data/, .env or .git in the bundle');
 // 5. Installer assets the .iss references.
 for (const rel of ['scripts/launcher.bat', 'scripts/post-install-models.ps1', 'Install-JobFinder.bat']) {
   if (fs.existsSync(path.join(DIST, rel))) ok.push(rel);
-  else problems.push(`${rel} missing from dist/windows/`);
+  else problems.push(`${rel} missing from the bundle root`);
 }
 
 const mb = (() => {
@@ -108,7 +107,7 @@ const mb = (() => {
   return (total / 1048576).toFixed(1);
 })();
 
-console.log(`\nBundle: dist/windows/  (${mb} MB)\n`);
+console.log(`\nBundle: windows/dist/JobFinder/  (${mb} MB)\n`);
 console.log(`  ✓ ${ok.length} check(s) passed`);
 if (problems.length) {
   console.error(`\n  ✗ ${problems.length} problem(s):`);

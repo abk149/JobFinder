@@ -2,7 +2,7 @@
 /* eslint-disable no-console */
 // Build a Windows-ready distribution of JobFinder.
 //
-// What this produces under `dist/windows/`:
+// What this produces under `windows/dist/JobFinder/`:
 //   app/                     Next.js standalone build (server.js + .next/ + node_modules subset)
 //   app/public/              static assets
 //   app/.next/static/        static chunks
@@ -20,8 +20,10 @@ const path = require('node:path');
 const https = require('node:https');
 const { execSync } = require('node:child_process');
 
-const ROOT = path.resolve(__dirname, '..');
-const DIST = path.join(ROOT, 'dist', 'windows');
+const ROOT = path.resolve(__dirname, '..');      // the JobFinder project
+const HERE = __dirname;                           // windows/ - everything Windows-specific
+const OUT  = path.join(HERE, 'dist');             // build output, gitignored
+const DIST = path.join(OUT, 'JobFinder');         // what the ZIP contains
 const APP = path.join(DIST, 'app');
 const NODE_DIR = path.join(DIST, 'node');
 const NODE_VERSION = process.env.JOBFINDER_NODE_VERSION || 'v20.18.0'; // LTS, ABI 115
@@ -210,9 +212,9 @@ async function main() {
   // 6. installer assets
   step('Copying installer assets');
   mkdirp(path.join(DIST, 'scripts'));
-  cprf(path.join(ROOT, 'installer', 'launcher.bat'), path.join(DIST, 'scripts', 'launcher.bat'));
-  cprf(path.join(ROOT, 'installer', 'post-install-models.ps1'), path.join(DIST, 'scripts', 'post-install-models.ps1'));
-  cprf(path.join(ROOT, 'installer', 'README.txt'), path.join(DIST, 'README.txt'));
+  cprf(path.join(HERE, 'installer', 'launcher.bat'), path.join(DIST, 'scripts', 'launcher.bat'));
+  cprf(path.join(HERE, 'installer', 'post-install-models.ps1'), path.join(DIST, 'scripts', 'post-install-models.ps1'));
+  cprf(path.join(HERE, 'installer', 'README.txt'), path.join(DIST, 'README.txt'));
 
   // 7. summary
   // ── Verify before declaring success ───────────────────────────────────────
@@ -300,7 +302,7 @@ async function main() {
 
   // The one-click installer sits at the ROOT of the bundle so the ZIP extracts to a
   // folder where double-clicking it is the obvious next action.
-  cprf(path.join(ROOT, 'installer', 'Install-JobFinder.bat'), path.join(DIST, 'Install-JobFinder.bat'));
+  cprf(path.join(HERE, 'installer', 'Install-JobFinder.bat'), path.join(DIST, 'Install-JobFinder.bat'));
 
   step('Verifying the bundle');
   const problems = [];
@@ -345,24 +347,25 @@ async function main() {
   // Ship a ZIP: one file to move to the Windows machine, and Explorer's built-in
   // "Extract All" is enough to unpack it — no third-party tool needed.
   step('Packaging JobFinder-Windows.zip');
-  const zipPath = path.join(ROOT, 'dist', 'JobFinder-Windows.zip');
+  const zipPath = path.join(OUT, 'JobFinder-Windows.zip');
   rmrf(zipPath);
   try {
-    execSync(`cd "${path.join(ROOT, 'dist')}" && zip -q -r "${zipPath}" windows -x "*.DS_Store"`, { stdio: 'inherit' });
+    // Zip the JobFinder folder itself, so extracting gives a single tidy directory.
+    execSync(`cd "${OUT}" && zip -q -r "${zipPath}" JobFinder -x "*.DS_Store"`, { stdio: 'inherit' });
     const mb = (fs.statSync(zipPath).size / 1048576).toFixed(1);
-    console.log(`  ✓ dist/JobFinder-Windows.zip (${mb} MB)`);
+    console.log(`  ✓ windows/dist/JobFinder-Windows.zip (${mb} MB)`);
   } catch {
     console.log('  ! zip not available — copy dist/windows/ across manually.');
   }
 
   step('Build complete');
-  console.log(`\n  📦 dist/windows/  →  ${sizeMb(DIST)} MB`);
+  console.log(`\n  📦 windows/dist/JobFinder/  →  ${sizeMb(DIST)} MB`);
   console.log('');
-  console.log('  Ready to ship: dist/JobFinder-Windows.zip');
+  console.log('  Ready to ship: windows/dist/JobFinder-Windows.zip');
   console.log('  Move it to the Windows machine, Extract All, then double-click');
-  console.log('  windows\\Install-JobFinder.bat - no admin rights, no toolchain needed.');
+  console.log('  JobFinder\\Install-JobFinder.bat - no admin rights, no toolchain needed.');
   console.log('');
-  console.log('  (Optional) For a signed .exe instead: run Inno Setup on installer/jobfinder.iss');
+  console.log('  (Optional) For a signed .exe instead: run Inno Setup on windows/installer/jobfinder.iss');
 }
 
 main().catch((e) => {

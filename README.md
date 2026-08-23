@@ -131,6 +131,7 @@ lib/            Core: browser control, autofill, answer bank, retrieval, cover l
 lib/prep/       Interview prep: skill extraction, research, synthesis, Q&A
 scripts/        Launcher install, Windows packaging, stealth + data-hygiene checks
 data/           Local state. Gitignored in full. Created on first run
+windows/        Windows packaging: one-click installer, launcher, build + verify
 ```
 
 ## Useful commands
@@ -142,6 +143,8 @@ node scripts/test-stealth.mjs            # 23 anti-detection probes
 node scripts/clean-answer-bank.mjs       # audit the answer bank (dry run)
 node scripts/check-canon-parity.mjs      # field-key canonicaliser parity check
 npm run install-launcher                 # desktop launcher (macOS)
+npm run build:windows                    # windows/dist/JobFinder-Windows.zip
+npm run verify:windows                   # 22 structural checks on that bundle
 ```
 
 ## Status and honest limitations
