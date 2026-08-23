@@ -41,10 +41,11 @@ data/.quicktoken
 # Local agent/editor config: contains absolute paths from the machine it ran on.
 /.claude
 
-# Packaging artefacts. Large, generated, and machine-specific — rebuild with
-# `npm run build:windows` instead of committing binaries.
+# Packaging OUTPUT is generated and large — rebuild with `npm run build:windows`.
+# Note: /installer is NOT ignored. It holds source (the launcher, the one-click
+# installer and the Inno script), which was briefly excluded here by mistake because
+# the directory name sounds like a build artefact.
 /dist
-/installer
 *.exe
 *.zip
 

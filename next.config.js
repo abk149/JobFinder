@@ -23,13 +23,22 @@ module.exports = {
   experimental: {
     // Next 14 reads these from `experimental`; Next 15 moved them to the top level.
     // If this project is ever upgraded, they have to move back out.
+    // TRACING EXCLUDES: only the two Playwright browser caches.
+    //
+    // There used to be entries for data, dist and installer. They are gone because
+    // Next's matcher does not anchor these the way a shell glob would: 'dist/**' also
+    // matched node_modules/next/dist, which cut Next's own runtime from 959 traced
+    // files down to 10 and left the packaged server dying on
+    //   Cannot find module './node-polyfill-crypto'
+    // Measured both ways before removing them.
+    //
+    // Nothing is lost: scripts/build-windows.js moves data/ aside for the duration of
+    // the packaging build, which is what actually prevents the browser sessions from
+    // being copied (that is the 12 GB problem these were added for).
+    //
+    // These two are safe because they name a specific path inside a specific package.
     outputFileTracingExcludes: {
       '*': [
-        'data/**/*',
-        '**/data/**',
-        '**/.next/cache/**',
-        '**/dist/**',
-        '**/installer/**',
         '**/node_modules/playwright-core/.local-browsers/**',
         '**/node_modules/rebrowser-playwright-core/.local-browsers/**',
       ],
