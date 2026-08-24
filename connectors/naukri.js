@@ -134,6 +134,53 @@ export default {
       }
     } catch { /* signed out or endpoint moved — keyword results stand */ }
 
+    // ── Early access roles ───────────────────────────────────────────────────
+    //
+    // "Exclusive opportunities based on what recruiters are searching for, even before
+    // they post a job." Naukri calls them pseudojobs internally, and they are the
+    // earliest anything is visible — worth reaching before a posting exists and the
+    // queue forms behind it.
+    //
+    // They work differently from a normal listing, in a way that matters: there is no
+    // Apply button. The action is "Share Interest", which registers you with the
+    // recruiter. lib/autoApply.js handles that separately.
+    //
+    // Note these carry NO companyApplyJob field at all, so the usual `!companyApplyJob`
+    // test would call them internal by accident rather than on purpose. They are marked
+    // explicitly here, because Share Interest genuinely does happen on Naukri.
+    try {
+      let early = null;
+      const onEarly = async (r) => {
+        if (!/\/jobapi\/v\d\/search\/pseudojobs/.test(r.url())) return;
+        try { early = await r.json(); } catch { /* not the payload */ }
+      };
+      page.on('response', onEarly);
+      await page.goto('https://www.naukri.com/mnjuser/recommended-earjobs', { waitUntil: 'domcontentloaded', timeout: 40000 });
+      await humanDelay(4000, 6000);
+      page.off('response', onEarly);
+
+      for (const j of (early?.jobDetails || [])) {
+        if (!j || !j.jdURL || !j.title) continue;
+        const url = j.jdURL.startsWith('http') ? j.jdURL : `https://www.naukri.com${j.jdURL}`;
+        const ext = url.split('?')[0];
+        if (out.some((x) => x.external_id === ext)) continue;
+        const place = (type) => (j.placeholders || []).find((x) => x.type === type)?.label || '';
+        out.push({
+          id: jobId('naukri', ext),
+          external_id: ext,
+          title: j.title,
+          company: j.companyName || j.companyTags?.[0] || 'Early access role',
+          location: place('location'),
+          url,
+          salary: place('salary'),
+          posted_at: j.createdDate ? new Date(j.createdDate).toISOString() : '',
+          description: j.jobDescription || '',
+          apply_kind: 'internal',
+          early_access: true,
+        });
+      }
+    } catch { /* signed out or the section moved — everything above still stands */ }
+
     await page.close();
     return out;
   },

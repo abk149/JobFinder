@@ -135,6 +135,27 @@ submissions: ten applications arriving at one board simultaneously is the cleare
 automation signal either site gets, and the penalty is a restricted account — which
 costs you the logged-in session everything else here depends on.
 
+### What goes into a batch
+
+A batch drawn purely by date ends up wherever the boards happened to be busy that
+morning, which is usually all one place. The mix is set deliberately: **half local, a
+third worldwide, a fifth remote**. Within each of those, freshest first.
+
+When a bucket cannot fill its share the spare places go to the others in priority
+order — **remote, then local, then worldwide**. Naukri is almost entirely domestic, so
+in practice its worldwide places go to remote roles before local ones, and if there are
+no remote roles either, the batch is simply all local. Nothing is ever left empty
+because a bucket ran dry.
+
+### Naukri early access
+
+Naukri shows a set of roles recruiters are searching for *before* they post the job.
+These have no application form at all — the only action is **Share Interest**, which
+puts you in front of the recruiter early. Auto-apply picks these up and treats Share
+Interest exactly as it treats a submission: a dry run never clicks it, and an armed run
+does. Getting in before a posting exists is the point, so they are worth having in the
+mix.
+
 ### Running it on a schedule
 
 The Auto-apply tab can repeat a batch by itself — every 20 minutes, hourly, or as slow

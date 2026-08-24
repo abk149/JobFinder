@@ -53,6 +53,11 @@ you to prove you're human.
   every job waiting on the same question
 - **Dry run by default** — fills every field, screenshots the completed form, and stops
   before Submit. Sending for real is a checkbox that is never remembered between runs
+- **Deliberate batch mix** — half the batch local, a third worldwide, a fifth remote,
+  with unfilled places going to remote first, then local, then worldwide
+- **Naukri early access** — the roles recruiters are searching for *before* they post
+  them. There is no application form; the action is "Share Interest", and auto-apply
+  treats it with the same care as a submission
 - **Scheduled runs** — repeat a batch every 20 minutes to 8 hours. Guarded by a daily
   cap derived from applications actually sent, so no restart or second window can reset
   it, and by a one-run-at-a-time lock
@@ -180,6 +185,7 @@ node scripts/test-stealth.mjs            # 23 anti-detection probes
 node scripts/test-autofill.mjs           # autofill end-to-end against a real form
 node scripts/test-observer-escaping.mjs  # guards the observer's template-literal escapes
 node scripts/test-notice-period.mjs      # notice-period arithmetic and dropdown bucketing
+node scripts/test-location-mix.mjs       # how a batch is composed by location
 node scripts/clean-answer-bank.mjs       # audit the answer bank (dry run)
 node scripts/check-canon-parity.mjs      # field-key canonicaliser parity check
 npm run install-launcher                 # desktop launcher (macOS)

@@ -11,19 +11,33 @@
 
 import { derivedAnswer, daysUntil, matchNoticeOption } from '../lib/derivedAnswers.js';
 let pass=0,fail=0; const t=(n,c,e='')=>{c?(pass++,console.log('    ok   '+n)):(fail++,console.log('    FAIL '+n+'   '+e));};
-const NOW=new Date('2026-08-24T10:00:00').getTime();
-const p={filters:JSON.stringify({last_working_day:'2026-10-08'})};   // 45 days out
+// The fixture is built RELATIVE to today, never pinned to a date.
+//
+// It was pinned once, and the suite went red the first time the clock rolled past
+// midnight: daysUntil was given a fixed "now" while derivedAnswer read the real one, so
+// the two disagreed by a day. A test for date arithmetic must not itself expire.
+const NOW = Date.now();
+// Built from LOCAL date parts, not toISOString(). Local midnight east of Greenwich is
+// the PREVIOUS day in UTC, so toISOString() silently shifts the date back one and the
+// fixture is 44 days out instead of 45 — the same class of bug the code under test
+// avoids by parsing "<date>T00:00:00" as local time.
+const isoLocal = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+const in45 = new Date();
+in45.setHours(0, 0, 0, 0);
+in45.setDate(in45.getDate() + 45);
+const LWD = isoLocal(in45);   // 45 days out, whatever today is
+const p = { filters: JSON.stringify({ last_working_day: LWD }) };
 
 console.log('\n  days remaining shrink with time:');
-t('45 days out', daysUntil('2026-10-08',NOW)===45, String(daysUntil('2026-10-08',NOW)));
-t('same date next week is 38', daysUntil('2026-10-08',NOW+7*86400000)===38, String(daysUntil('2026-10-08',NOW+7*86400000)));
-t('past dates floor at 0', daysUntil('2026-01-01',NOW)===0);
+t('45 days out', daysUntil(LWD,NOW)===45, String(daysUntil(LWD,NOW)));
+t('same date next week is 38', daysUntil(LWD,NOW+7*86400000)===38, String(daysUntil(LWD,NOW+7*86400000)));
+t('past dates floor at 0', daysUntil('2020-01-01',NOW)===0);
 
 console.log('\n  which questions it answers:');
 t('notice period', derivedAnswer(p,'Notice period (in days)')?.value==='45', JSON.stringify(derivedAnswer(p,'Notice period (in days)')));
 t('please enter your notice period in days', derivedAnswer(p,'Please enter your notice period in days')?.value==='45');
 t('how soon can you join', derivedAnswer(p,'How soon can you join?')?.value==='45');
-t('earliest start DATE gives a date', derivedAnswer(p,'Earliest start date?')?.value==='2026-10-08');
+t('earliest start DATE gives a date', derivedAnswer(p,'Earliest start date?')?.value===LWD);
 t('leaves unrelated questions alone', derivedAnswer(p,'Expected CTC')===null);
 t('leaves current CTC alone', derivedAnswer(p,'Please enter your current ctc in INR')===null);
 t('nothing without a last working day', derivedAnswer({filters:'{}'},'Notice period')===null);
