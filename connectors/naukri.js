@@ -21,6 +21,31 @@ export default {
     const kw = (buildKeywordQuery(profile) || 'software engineer').replace(/\s+/g, '-');
     const loc = firstLocation(profile).replace(/\s+/g, '-').toLowerCase();
     const url = `https://www.naukri.com/${encodeURIComponent(kw)}-jobs${loc ? `-in-${encodeURIComponent(loc)}` : ''}`;
+
+    // ── Which of these can actually be applied to ON Naukri? ──────────────────
+    //
+    // Most Naukri results are "Apply on company site": the button just bounces you to
+    // the employer's own careers page, so auto-apply can do nothing with them. Finding
+    // that out by opening each posting costs ~5s a job and, before this, filled whole
+    // batches with results nobody could act on.
+    //
+    // The search page asks Naukri's own API for the results it renders, and that answer
+    // already contains the flag: companyApplyJob=true means the employer's site owns the
+    // application. So read the response the page fetches anyway — no extra request, no
+    // guessing at the API's required headers, and nothing to keep in sync if the card
+    // markup changes again.
+    const applyKind = new Map();   // numeric job id -> 'internal' | 'external'
+    page.on('response', async (r) => {
+      if (!/\/jobapi\/v\d\/search/.test(r.url())) return;
+      try {
+        const body = await r.json();
+        for (const j of body.jobDetails || body.jobs || []) {
+          if (!j || j.jobId == null) continue;
+          applyKind.set(String(j.jobId), j.companyApplyJob ? 'external' : 'internal');
+        }
+      } catch { /* not the payload we wanted */ }
+    });
+
     const res = await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 40000 });
     if (res && res.status() === 403) {
       await page.close().catch(() => {});
@@ -54,10 +79,14 @@ export default {
       const salary = await safeText(card.locator('span.salary, span.sal').first());
       if (!title || !href) continue;
       const ext = href.split('?')[0];
+      // Naukri puts the numeric job id at the end of the slug, which is the same id the
+      // search API keys its results by.
+      const numeric = (ext.match(/(\d{6,})(?:\?|$)/) || [])[1] || '';
       out.push({
         id: jobId('naukri', ext),
         external_id: ext, title, company, location, url: href,
         salary, posted_at: '', description: '',
+        apply_kind: applyKind.get(numeric) || null,
       });
     }
     await page.close();

@@ -135,6 +135,30 @@ submissions: ten applications arriving at one board simultaneously is the cleare
 automation signal either site gets, and the penalty is a restricted account — which
 costs you the logged-in session everything else here depends on.
 
+**A batch of 10 means 10 real attempts.** Postings that turn out to redirect to the
+employer's own site, or to have expired, are skipped in a couple of seconds and do not
+use up a place — the board keeps pulling candidates until it has ten it could actually
+work on. Which jobs those are is increasingly known before the run even starts: Naukri's
+search tells us which postings are "Apply on company site", and LinkedIn is scanned a
+second time through its Easy Apply filter. Anything discovered the slow way is
+remembered, so no posting costs you that lookup twice.
+
+**Jobs waiting on a question you have not answered are not retried.** They would walk
+the same form and stop at the same blank field. They return automatically the moment you
+answer it.
+
+**A posting that fails three times is set aside** and stops appearing in batches, so one
+form this code cannot drive can't occupy a place in every future run. That is per
+*posting*, never per role: if the same employer posts the same job again, it arrives as
+a new entry with a clean slate and you will apply to it.
+
+**Notice period answers itself.** Set *Last working day* on the Profile tab and any
+"notice period" question is computed from that date — 45 days today, 44 tomorrow —
+instead of being stored as a number that silently goes stale. Dropdowns get the bucket
+the real figure falls into, always rounding **up**, because telling an employer you can
+start sooner than you can is the error that costs an offer. If every option offered is
+shorter than the truth, it asks you rather than picking one.
+
 **Stale postings are skipped, not tried.** Naukri listings are only considered for 10
 days and LinkedIn for 21, and within that window today's jobs are always tried first.
 This matters more than it sounds: a run ordered by fit score alone spent its entire

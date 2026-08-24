@@ -48,6 +48,13 @@ you to prove you're human.
   every job waiting on the same question
 - **Dry run by default** — fills every field, screenshots the completed form, and stops
   before Submit. Sending for real is a checkbox that is never remembered between runs
+- **Notice period is computed, not stored.** Give it your last working day and every
+  "notice period" answer is worked out from the date — right today and right in six
+  weeks. Dropdowns get the bucket the real figure falls into, always rounding *up*
+- **Applyable jobs are identified while scanning.** Naukri's search API says which
+  postings redirect to the employer; LinkedIn's Easy Apply filter is scanned separately.
+  So a batch of 10 means 10 real attempts, not 10 postings that turn out to be someone
+  else's application form
 - Capped per run, with human pacing between applications, because both sites treat a
   burst of applications as automation
 
@@ -163,6 +170,7 @@ npm run build && npm start               # production
 node scripts/test-stealth.mjs            # 23 anti-detection probes
 node scripts/test-autofill.mjs           # autofill end-to-end against a real form
 node scripts/test-observer-escaping.mjs  # guards the observer's template-literal escapes
+node scripts/test-notice-period.mjs      # notice-period arithmetic and dropdown bucketing
 node scripts/clean-answer-bank.mjs       # audit the answer bank (dry run)
 node scripts/check-canon-parity.mjs      # field-key canonicaliser parity check
 npm run install-launcher                 # desktop launcher (macOS)

@@ -2580,6 +2580,31 @@ function ProfileEditor({ profile, onChange, onSave, onDelete }) {
           <input value={profile.locations || ''} onChange={(e) => setField('locations', e.target.value)} placeholder="Remote, San Francisco, Bangalore" />
         </div>
         <div className="col">
+          <label className="label">
+            Last working day at your current job
+            {(() => {
+              const d = filters.last_working_day;
+              if (!d) return <span className="muted"> · not set — notice period comes from your answer bank instead</span>;
+              const days = Math.max(0, Math.round((new Date(`${d}T00:00:00`) - new Date(new Date().toDateString())) / 86400000));
+              return Number.isNaN(days)
+                ? <span style={{ color: '#f85149' }}> · not a valid date</span>
+                : <span style={{ color: '#3fb950' }}> · notice period answers as <strong>{days} day{days === 1 ? '' : 's'}</strong> today</span>;
+            })()}
+          </label>
+          <input
+            type="date"
+            value={filters.last_working_day || ''}
+            onChange={(e) => setFilter('last_working_day', e.target.value)}
+          />
+          <div className="muted" style={{ fontSize: 12 }}>
+            Set this and &ldquo;notice period&rdquo; is worked out from the date every time a form
+            asks, instead of being stored as a number that is wrong tomorrow. Dropdowns get the
+            bucket the real figure falls into, always rounding <em>up</em> — claiming you can start
+            sooner than you can is the mistake that costs an offer.
+          </div>
+        </div>
+
+        <div className="col">
           <label className="label">Bio / career summary (used as LLM context for writeups)</label>
           <textarea
             rows={5}
@@ -2836,12 +2861,15 @@ function AutoApplyPanel({ profileId, flash }) {
           <div className="label">
             Last run — {result.armed ? 'live' : 'dry run'}
             {result.tookSeconds != null ? ` in ${result.tookSeconds}s` : ''}
-            {result.perConnector
-              ? ` (${Object.entries(result.perConnector).map(([k, v]) => `${k}: ${v}`).join(', ')})`
+            {result.byBoard
+              ? ` (${Object.entries(result.byBoard)
+                .map(([k, v]) => `${k}: ${v.attempts} attempt${v.attempts === 1 ? '' : 's'} from ${v.opened} opened`)
+                .join(', ')})`
               : ''}
             : {result.applied || 0} applied ·{' '}
             {result.dryRun || 0} filled &amp; held · {result.needsInput || 0} waiting on you ·{' '}
             {result.skipped || 0} skipped · {result.errors || 0} error(s)
+            {result.abandoned ? ` · ${result.abandoned} given up on` : ''}
           </div>
           <div className="table-wrap" style={{ marginTop: 8, maxHeight: 320, overflowY: 'auto' }}>
             <table>

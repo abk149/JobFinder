@@ -104,21 +104,37 @@ export const POST = withErrorHandling(async (req) => {
           // canonical_key collapses the same role scraped from several boards into
           // one entry. Set at insert so freshly-scanned jobs dedupe immediately,
           // without waiting for a fit-scoring pass.
-          // ON CONFLICT DO NOTHING means a repeat job affects 0 rows — that's how
-          // we tell "genuinely new" from "already had it".
-          const res = await run(
-            `INSERT INTO jobs (id, profile_id, connector, external_id, title, company, location, url, salary, posted_at, description, raw_json, status, discovered_at, canonical_key)
-             VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
-             ON CONFLICT(profile_id, connector, external_id) DO NOTHING`,
+          // A repeat posting still updates ONE thing: apply_kind. Learning that a job
+          // redirects to the employer's own site is worth keeping the moment we know
+          // it, so auto-apply never spends a place in a batch rediscovering it. Nothing
+          // else is touched — a rescan must not overwrite your pipeline state.
+          //
+          // res.changes is therefore no longer a reliable "was this new?" signal, so
+          // newness is decided by checking for the row first.
+          // Was this posting already known? Asked BEFORE the upsert, because the
+          // upsert now also updates apply_kind on existing rows, so "rows changed"
+          // no longer distinguishes a new job from a re-seen one.
+          const already = await get(
+            'SELECT 1 AS x FROM jobs WHERE profile_id = ? AND connector = ? AND external_id = ?',
+            [profile_id, c.id, j.external_id]
+          );
+          await run(
+            `INSERT INTO jobs (id, profile_id, connector, external_id, title, company, location, url, salary, posted_at, description, raw_json, status, discovered_at, canonical_key, apply_kind)
+             VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+             ON CONFLICT(profile_id, connector, external_id) DO UPDATE
+               SET apply_kind = COALESCE(EXCLUDED.apply_kind, jobs.apply_kind)`,
             [
               j.id, profile_id, c.id, j.external_id,
               j.title || '', j.company || '', j.location || '',
               j.url || '', j.salary || '', j.posted_at || '',
               j.description || '', JSON.stringify(j),
               'new', Date.now(), canonicalJobKey(j) || null,
+              // Known up front for Naukri; null everywhere else, and filled in lazily
+              // by auto-apply the first time it opens the posting.
+              j.apply_kind || null,
             ]
           );
-          if ((res?.changes ?? 1) > 0) {
+          if (!already) {
             found++;
             // Harvest any hiring address the ad printed itself ("send your CV to …").
             // Only on genuinely new rows, so re-scanning doesn't re-walk the archive.

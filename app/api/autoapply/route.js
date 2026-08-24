@@ -11,6 +11,7 @@
 import { get } from '../../../lib/db.js';
 import { autoApplyRun, eligibleByConnector } from '../../../lib/autoApply.js';
 import { listNeedsInput, countNeedsInput } from '../../../lib/answerBank.js';
+import { derivedAnswer } from '../../../lib/derivedAnswers.js';
 import { readJson, requireFields, withErrorHandling, HttpError } from '../../../lib/http.js';
 import { lcmd, lwarn } from '../../../lib/logger.js';
 
@@ -49,10 +50,17 @@ export async function GET(req) {
   const { searchParams } = new URL(req.url);
   const profile_id = searchParams.get('profile_id');
   if (!profile_id) return Response.json({ error: 'profile_id required' }, { status: 400 });
-  const [questions, pools] = await Promise.all([
+  const profile = await get('SELECT * FROM profiles WHERE id = ?', [profile_id]);
+  const [raw, pools] = await Promise.all([
     listNeedsInput(profile_id),
     eligibleByConnector(profile_id, 200),
   ]);
+  // Drop questions that are now computed rather than remembered. Setting a last working
+  // day answers every "notice period" question at once, and leaving them listed would
+  // ask you for something the app already knows.
+  const questions = raw.filter(
+    (q) => !(profile && derivedAnswer(profile, q.label || q.field_key, { type: q.type, options: q.options }))
+  );
   const byConnector = Object.fromEntries(Object.entries(pools).map(([c, r]) => [c, r.length]));
   return Response.json({
     questions,

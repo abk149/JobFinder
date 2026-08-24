@@ -74,6 +74,65 @@ export default {
         }
         await humanDelay(400, 900);
       }
+
+      // ── Easy Apply pass ──────────────────────────────────────────────────
+      //
+      // The guest endpoint above is public, which is why scanning works logged out —
+      // but it never says whether a posting is Easy Apply, and most are not. Auto-apply
+      // therefore had to open each one to find out: in a measured batch it opened 34
+      // postings to find 4 it could actually drive.
+      //
+      // The authenticated search takes f_AL=true, which returns ONLY Easy Apply jobs.
+      // Those are the ones that can be applied to without leaving LinkedIn, so they are
+      // collected here and tagged, and auto-apply can go straight to them.
+      //
+      // Best-effort and additive: it needs a signed-in session, and if there isn't one
+      // the guest results above stand on their own exactly as before.
+      try {
+        const easyUrl = 'https://www.linkedin.com/jobs/search/?f_AL=true'
+          + `&keywords=${encodeURIComponent(kw)}&location=${encodeURIComponent(loc)}`;
+        await page.goto(easyUrl, { waitUntil: 'domcontentloaded', timeout: 30000 });
+        await humanDelay(2500, 4000);
+        const easy = await page.evaluate(() => {
+          const seenIds = new Set();
+          const rows = [];
+          for (const card of document.querySelectorAll('[data-job-id]')) {
+            const id = card.getAttribute('data-job-id');
+            if (!id || !/^\d+$/.test(id) || seenIds.has(id)) continue;
+            seenIds.add(id);
+            const t = card.querySelector('a.job-card-container__link, a.job-card-list__title, strong');
+            const c = card.querySelector('.artdeco-entity-lockup__subtitle, .job-card-container__primary-description');
+            const l = card.querySelector('.job-card-container__metadata-item, .artdeco-entity-lockup__caption');
+            rows.push({
+              id,
+              title: (t?.innerText || '').trim().split('\n')[0],
+              company: (c?.innerText || '').trim().split('\n')[0],
+              location: (l?.innerText || '').trim().split('\n')[0],
+            });
+          }
+          return rows;
+        });
+        for (const e of easy) {
+          if (!e.title) continue;
+          const ext = `https://www.linkedin.com/jobs/view/${e.id}`;
+          if (seen.has(ext)) continue;
+          seen.add(ext);
+          out.push({
+            id: jobId('linkedin', ext),
+            external_id: ext,
+            title: e.title,
+            company: e.company || '',
+            location: e.location || '',
+            url: ext,
+            salary: '',
+            posted_at: '',
+            description: '',
+            // The whole point: these came from the Easy Apply filter, so auto-apply
+            // never has to open one to discover it redirects elsewhere.
+            apply_kind: 'internal',
+          });
+        }
+      } catch { /* not signed in, or LinkedIn changed the search page — guest results stand */ }
     } finally {
       await page.close().catch(() => {});
     }
