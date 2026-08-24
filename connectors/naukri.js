@@ -89,6 +89,51 @@ export default {
         apply_kind: applyKind.get(numeric) || null,
       });
     }
+    // ── Recommendations ──────────────────────────────────────────────────────
+    //
+    // A keyword search is not where Naukri keeps the jobs you can actually apply to.
+    // Measured on one profile: a "business consultant" search returned 24 postings, all
+    // of them "Apply on company site". The signed-in homepage — "Jobs based on your
+    // profile" and "Jobs based on your applies" — returned 66, of which 46 apply on
+    // Naukri itself.
+    //
+    // Those feeds are drawn from one endpoint, and it hands over everything needed
+    // (title, company, URL, and companyApplyJob) as JSON, so there is no card markup to
+    // track. Additive and best-effort: it needs a signed-in session, and without one the
+    // keyword results above stand exactly as before.
+    try {
+      let recommended = null;
+      const onRecom = async (r) => {
+        if (!/\/jobapi\/v\d\/search\/recom-jobs/.test(r.url())) return;
+        try { recommended = await r.json(); } catch { /* not the payload */ }
+      };
+      page.on('response', onRecom);
+      await page.goto('https://www.naukri.com/mnjuser/homepage', { waitUntil: 'domcontentloaded', timeout: 40000 });
+      await humanDelay(4000, 6000);
+      page.off('response', onRecom);
+
+      for (const j of (recommended?.jobDetails || [])) {
+        if (!j || !j.jdURL || !j.title) continue;
+        const url = j.jdURL.startsWith('http') ? j.jdURL : `https://www.naukri.com${j.jdURL}`;
+        const ext = url.split('?')[0];
+        if (out.some((x) => x.external_id === ext)) continue;
+        const place = (type) => (j.placeholders || []).find((x) => x.type === type)?.label || '';
+        out.push({
+          id: jobId('naukri', ext),
+          external_id: ext,
+          title: j.title,
+          company: j.companyName || '',
+          location: place('location'),
+          url,
+          salary: place('salary'),
+          posted_at: j.createdDate ? new Date(j.createdDate).toISOString() : '',
+          description: j.jobDescription || '',
+          // Straight from Naukri: false means the application is completed on Naukri.
+          apply_kind: j.companyApplyJob ? 'external' : 'internal',
+        });
+      }
+    } catch { /* signed out or endpoint moved — keyword results stand */ }
+
     await page.close();
     return out;
   },

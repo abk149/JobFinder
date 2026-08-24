@@ -135,6 +135,14 @@ submissions: ten applications arriving at one board simultaneously is the cleare
 automation signal either site gets, and the penalty is a restricted account — which
 costs you the logged-in session everything else here depends on.
 
+**Sign in to both boards — it is the difference between a handful of applyable jobs and
+a hundred.** A keyword search is not where either site keeps the work you can apply to
+without leaving it. Naukri's signed-in homepage feeds ("jobs based on your profile" and
+"based on your applies") are mostly jobs that apply on Naukri, while a keyword search of
+the same profile returned 24 postings that were *all* "Apply on company site". LinkedIn
+is the same story through its Easy Apply collection. Both are scanned automatically when
+a signed-in session exists, and skipped silently when it does not.
+
 **A batch of 10 means 10 real attempts.** Postings that turn out to redirect to the
 employer's own site, or to have expired, are skipped in a couple of seconds and do not
 use up a place — the board keeps pulling candidates until it has ten it could actually

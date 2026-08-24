@@ -17,6 +17,9 @@ import { jobId, buildKeywordQuery, firstLocation, safeText, safeAttr, humanDelay
 // live: HTTP 200, 10 cards, title/company/location/href all populated.
 const GUEST_SEARCH = 'https://www.linkedin.com/jobs-guest/jobs/api/seeMoreJobPostings/search';
 const PAGES = 3;          // 10 cards per page
+// Easy Apply pages to walk per feed. 25 cards a page, so 4 covers ~100 postings — past
+// that the results stop being relevant faster than they add value.
+const EASY_APPLY_PAGES = 4;
 const PER_PAGE = 10;
 
 export default {
@@ -82,55 +85,76 @@ export default {
       // therefore had to open each one to find out: in a measured batch it opened 34
       // postings to find 4 it could actually drive.
       //
-      // The authenticated search takes f_AL=true, which returns ONLY Easy Apply jobs.
-      // Those are the ones that can be applied to without leaving LinkedIn, so they are
-      // collected here and tagged, and auto-apply can go straight to them.
+      // Signed in, LinkedIn has a feed of exactly these, and f_AL=true filters any
+      // search down to them. Both are read here and tagged, so auto-apply can go
+      // straight to jobs it can complete.
       //
-      // Best-effort and additive: it needs a signed-in session, and if there isn't one
-      // the guest results above stand on their own exactly as before.
+      // TWO THINGS THIS GOT WRONG THE FIRST TIME, both of which capped it at 7 jobs
+      // while LinkedIn was reporting 73 results:
+      //   • the cards are `[data-occludable-job-id]`, not `[data-job-id]` — the latter
+      //     matches a handful of unrelated elements and misses most of the list
+      //   • the list is paginated, and `&start=` is ignored on this route; the page
+      //     buttons at the bottom are the only way through. Scrolling does nothing.
+      //
+      // Best-effort: it needs a signed-in session, and without one the guest results
+      // above stand on their own exactly as before.
       try {
-        const easyUrl = 'https://www.linkedin.com/jobs/search/?f_AL=true'
-          + `&keywords=${encodeURIComponent(kw)}&location=${encodeURIComponent(loc)}`;
-        await page.goto(easyUrl, { waitUntil: 'domcontentloaded', timeout: 30000 });
-        await humanDelay(2500, 4000);
-        const easy = await page.evaluate(() => {
-          const seenIds = new Set();
+        const feeds = [
+          'https://www.linkedin.com/jobs/collections/easy-apply/',
+          `https://www.linkedin.com/jobs/search/?f_AL=true&keywords=${encodeURIComponent(kw)}`
+            + `&location=${encodeURIComponent(loc)}`,
+        ];
+        const readCards = () => page.evaluate(() => {
+          const text = (el) => (el?.innerText || '').trim().split('\n')[0].trim();
           const rows = [];
-          for (const card of document.querySelectorAll('[data-job-id]')) {
-            const id = card.getAttribute('data-job-id');
-            if (!id || !/^\d+$/.test(id) || seenIds.has(id)) continue;
-            seenIds.add(id);
-            const t = card.querySelector('a.job-card-container__link, a.job-card-list__title, strong');
-            const c = card.querySelector('.artdeco-entity-lockup__subtitle, .job-card-container__primary-description');
-            const l = card.querySelector('.job-card-container__metadata-item, .artdeco-entity-lockup__caption');
+          for (const li of document.querySelectorAll('[data-occludable-job-id]')) {
+            const id = li.getAttribute('data-occludable-job-id');
+            if (!id || !/^\d+$/.test(id)) continue;
             rows.push({
               id,
-              title: (t?.innerText || '').trim().split('\n')[0],
-              company: (c?.innerText || '').trim().split('\n')[0],
-              location: (l?.innerText || '').trim().split('\n')[0],
+              title: text(li.querySelector('.artdeco-entity-lockup__title, .job-card-list__title--link, strong')),
+              company: text(li.querySelector('.artdeco-entity-lockup__subtitle, .job-card-container__primary-description')),
+              location: text(li.querySelector('.artdeco-entity-lockup__caption, .job-card-container__metadata-item')),
             });
           }
           return rows;
         });
-        for (const e of easy) {
-          if (!e.title) continue;
-          const ext = `https://www.linkedin.com/jobs/view/${e.id}`;
-          if (seen.has(ext)) continue;
-          seen.add(ext);
-          out.push({
-            id: jobId('linkedin', ext),
-            external_id: ext,
-            title: e.title,
-            company: e.company || '',
-            location: e.location || '',
-            url: ext,
-            salary: '',
-            posted_at: '',
-            description: '',
-            // The whole point: these came from the Easy Apply filter, so auto-apply
-            // never has to open one to discover it redirects elsewhere.
-            apply_kind: 'internal',
-          });
+
+        for (const feed of feeds) {
+          await page.goto(feed, { waitUntil: 'domcontentloaded', timeout: 30000 });
+          await humanDelay(2500, 4000);
+
+          for (let pageNo = 1; pageNo <= EASY_APPLY_PAGES; pageNo++) {
+            for (const e of await readCards()) {
+              if (!e.title) continue;
+              const ext = `https://www.linkedin.com/jobs/view/${e.id}`;
+              if (seen.has(ext)) continue;
+              seen.add(ext);
+              out.push({
+                id: jobId('linkedin', ext),
+                external_id: ext,
+                title: e.title,
+                company: e.company || '',
+                location: e.location || '',
+                url: ext,
+                salary: '',
+                posted_at: '',
+                description: '',
+                // The whole point: these came from an Easy Apply source, so auto-apply
+                // never opens one to discover it redirects to someone else's site.
+                apply_kind: 'internal',
+              });
+            }
+            // Next page, if LinkedIn is offering one.
+            const moved = await page.evaluate((n) => {
+              const b = document.querySelector(`button[aria-label="Page ${n + 1}"]`);
+              if (!b) return false;
+              b.click();
+              return true;
+            }, pageNo);
+            if (!moved) break;
+            await humanDelay(2200, 3500);
+          }
         }
       } catch { /* not signed in, or LinkedIn changed the search page — guest results stand */ }
     } finally {

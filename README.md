@@ -21,6 +21,9 @@ you to prove you're human.
 ## What it does
 
 **Finding work**
+- **Signed-in sources.** Beyond keyword search, a signed-in session unlocks the feeds
+  that actually carry applyable work: Naukri's profile recommendations and LinkedIn's
+  Easy Apply collection. On one profile these took the applyable pool from 8 jobs to 103
 - 21 connectors: Arbeitnow, Bluesky, Hacker News, Himalayas, Jobicy, Jobspresso,
   LinkedIn, LinkedIn Posts, Naukri, NoDesk, Otta, Psychology, Reddit, RemoteOK,
   Remotive, TechStartups, The Muse, Wellfound, We Work Remotely, Working Nomads,
@@ -51,10 +54,11 @@ you to prove you're human.
 - **Notice period is computed, not stored.** Give it your last working day and every
   "notice period" answer is worked out from the date — right today and right in six
   weeks. Dropdowns get the bucket the real figure falls into, always rounding *up*
-- **Applyable jobs are identified while scanning.** Naukri's search API says which
-  postings redirect to the employer; LinkedIn's Easy Apply filter is scanned separately.
-  So a batch of 10 means 10 real attempts, not 10 postings that turn out to be someone
-  else's application form
+- **Applyable jobs are identified while scanning.** Naukri's own recommendation feed
+  ("jobs based on your profile / your applies") reports which postings apply on Naukri
+  and which redirect to the employer; LinkedIn's Easy Apply feed and filter are walked
+  separately. So a batch of 10 means 10 real attempts, not 10 postings that turn out to
+  be someone else's application form
 - Capped per run, with human pacing between applications, because both sites treat a
   burst of applications as automation
 
