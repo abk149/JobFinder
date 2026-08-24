@@ -88,6 +88,47 @@ instant — no LLM. Then sort by fit, or filter to *strong only (70+)*.
 Apply never moves a job **backwards**. Re-opening something already at *Applied* or
 *Interview* leaves the stage — and the original applied date — untouched.
 
+### Applying automatically (Auto-apply tab)
+
+Some applications finish on the job board itself — LinkedIn **Easy Apply** and Naukri's
+**Apply** (as opposed to *Apply on company site*). Those, JobFinder can complete for you.
+
+**Start with a dry run.** The button says *🧪 Dry run* until you tick **Send for real**.
+A dry run fills every field, screenshots the finished form into
+`data/applications/<profile>/`, and stops at the Submit button. Look at a few before you
+arm it — that is when you find out that a salary box got something you would not have
+written.
+
+**It stops rather than guessing.** If a form asks something your answer bank has no
+answer for, the application is abandoned and the question appears under *Questions
+waiting on you* with the site's own dropdown choices where it had them. Answer it once
+and every job asking the same thing continues — questions are keyed like any other
+answer, so "expected CTC" is answered once, not once per employer.
+
+Nothing you have not answered is ever filled in on your behalf, and a question waiting
+on you can never be used as an answer by autofill or the LLM.
+
+**What the outcomes mean**
+
+| Outcome | Meaning |
+|---|---|
+| `applied` | Submitted. The job moves to *Applied*. |
+| `dry_run` | Filled and ready; not sent, because it was not armed. |
+| `needs_input` | Stopped — see the questions above the results. |
+| `external` | Applies on the employer's own site. Not ours to drive; use **Apply**. |
+| `already_applied` | The site says you have applied before. |
+| `expired` | The posting is gone; the site redirected to its search page. |
+| `error` | Something specific went wrong — the note says what. |
+
+**Naukri is different from LinkedIn.** LinkedIn's Easy Apply is a wizard with a review
+step, so a dry run can walk the whole thing and back out. On Naukri, clicking *Apply*
+**is** the submission — there is nothing to stop at — so a dry run does not click it at
+all and reports what it would have done.
+
+**On the cap.** Both sites read a burst of applications as automation, and an account
+restriction costs you the logged-in session everything else here depends on. The cap is
+10 per run by default and 25 at most, with a pause between each.
+
 ### Autofill modes
 
 | Button | Behaviour |

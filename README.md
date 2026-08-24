@@ -38,6 +38,19 @@ you to prove you're human.
   to …") are captured during scanning into an editable, CSV-exportable directory with
   company and, where stated, name and designation
 
+**Applying automatically**
+- **Auto-apply** completes LinkedIn *Easy Apply* and Naukri *on-site* applications
+  without you — the two flows that finish on the job board rather than redirecting to
+  an employer's ATS
+- It **never invents a fact about you.** A drafted paragraph is a writing task and the
+  model does it; "how many years of Kubernetes do you have" is not. Anything the answer
+  bank cannot answer becomes a question, the application stops, and one answer unblocks
+  every job waiting on the same question
+- **Dry run by default** — fills every field, screenshots the completed form, and stops
+  before Submit. Sending for real is a checkbox that is never remembered between runs
+- Capped per run, with human pacing between applications, because both sites treat a
+  burst of applications as automation
+
 **Applying**
 - **Answer bank** — captures what you type into application forms and replays it. New
   captures land in a **review queue** and are invisible to autofill until you approve them
@@ -148,6 +161,8 @@ windows/        Windows packaging: one-click installer, launcher, build + verify
 npm run dev                              # dev server on :3737
 npm run build && npm start               # production
 node scripts/test-stealth.mjs            # 23 anti-detection probes
+node scripts/test-autofill.mjs           # autofill end-to-end against a real form
+node scripts/test-observer-escaping.mjs  # guards the observer's template-literal escapes
 node scripts/clean-answer-bank.mjs       # audit the answer bank (dry run)
 node scripts/check-canon-parity.mjs      # field-key canonicaliser parity check
 npm run install-launcher                 # desktop launcher (macOS)

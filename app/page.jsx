@@ -428,6 +428,7 @@ export default function Dashboard() {
                 <div className={`tab ${tab === 'jobs' ? 'active' : ''}`} onClick={() => setTab('jobs')}>Jobs</div>
                 <div className={`tab ${tab === 'sources' ? 'active' : ''}`} onClick={() => setTab('sources')}>Sources</div>
                 <div className={`tab ${tab === 'answers' ? 'active' : ''}`} onClick={() => setTab('answers')}>Answer bank</div>
+                <div className={`tab ${tab === 'autoapply' ? 'active' : ''}`} onClick={() => setTab('autoapply')}>🤖 Auto-apply</div>
                 <div className={`tab ${tab === 'prep' ? 'active' : ''}`} onClick={() => setTab('prep')}>🎓 Interview Prep</div>
                 <div className={`tab ${tab === 'inbox' ? 'active' : ''}`} onClick={() => setTab('inbox')}>
                   📧 Replies
@@ -825,6 +826,7 @@ export default function Dashboard() {
               )}
 
               {tab === 'answers' && <AnswerBank profileId={activeProfile.id} />}
+              {tab === 'autoapply' && <AutoApplyPanel profileId={activeProfile.id} flash={flash} />}
 
               {tab === 'prep' && (
                 <>
@@ -2676,6 +2678,183 @@ function ProfileEditor({ profile, onChange, onSave, onDelete }) {
           <button className="danger" onClick={onDelete}>Delete profile</button>
         </div>
       </div>
+    </div>
+  );
+}
+
+// Auto-apply: the only screen in this app that can send something to an employer.
+//
+// Two things are deliberately awkward here, because both protect you:
+//   • "Send for real" is a checkbox that resets on every load. It is never remembered,
+//     because a persisted arm-switch is precisely the thing that gets left on.
+//   • Questions the run could not answer are shown FIRST and block nothing else. The
+//     run never guesses at a fact about you; it stops and asks, and one answer
+//     unblocks every job waiting on the same question.
+function AutoApplyPanel({ profileId, flash }) {
+  const [questions, setQuestions] = useState([]);
+  const [eligible, setEligible] = useState(0);
+  const [byConnector, setByConnector] = useState({});
+  const [armed, setArmed] = useState(false);       // never persisted, by design
+  const [limit, setLimit] = useState(10);
+  const [busy, setBusy] = useState(false);
+  const [result, setResult] = useState(null);
+  const [drafts, setDrafts] = useState({});
+
+  const load = useCallback(async () => {
+    const r = await fetch(`/api/autoapply?profile_id=${profileId}`).then((x) => x.json()).catch(() => ({}));
+    setQuestions(r.questions || []);
+    setEligible(r.eligible || 0);
+    setByConnector(r.byConnector || {});
+  }, [profileId]);
+  useEffect(() => { load(); }, [load]);
+
+  async function answer(q) {
+    const value = (drafts[q.field_key] ?? '').trim();
+    if (!value) return;
+    await fetch('/api/answers', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ profile_id: profileId, field_key: q.field_key, value, label: q.label }),
+    });
+    setDrafts((d) => ({ ...d, [q.field_key]: '' }));
+    flash?.(`Saved — every job waiting on "${q.field_key}" can go ahead now.`);
+    load();
+  }
+
+  async function run() {
+    setBusy(true); setResult(null);
+    try {
+      const r = await fetch('/api/autoapply', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ profile_id: profileId, armed, limit: Number(limit) || 10 }),
+      }).then((x) => x.json());
+      setResult(r);
+      flash?.(armed
+        ? `Sent ${r.applied || 0} application(s).`
+        : `Dry run: ${r.dryRun || 0} form(s) filled and left unsent.`);
+      load();
+    } catch (e) {
+      flash?.(`Auto-apply failed: ${e.message}`);
+    } finally { setBusy(false); }
+  }
+
+  return (
+    <div>
+      <div className="card">
+        <div className="row" style={{ justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 12 }}>
+          <div>
+            <div className="label">Apply automatically</div>
+            <div className="muted">
+              Completes LinkedIn <strong>Easy Apply</strong> and Naukri&apos;s <strong>on-site</strong> applications
+              using your answer bank. It never invents an answer — anything it does not know
+              becomes a question below, and that application waits.
+            </div>
+            <div className="muted" style={{ marginTop: 6 }}>
+              {eligible} job{eligible === 1 ? '' : 's'} to try
+              {Object.keys(byConnector).length
+                ? ` (${Object.entries(byConnector).map(([k, v]) => `${k}: ${v}`).join(', ')})`
+                : ''}
+            </div>
+          </div>
+          <div className="row" style={{ gap: 8, alignItems: 'center' }}>
+            <label className="muted" style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+              max
+              <input type="number" min="1" max="25" value={limit}
+                onChange={(e) => setLimit(e.target.value)} style={{ width: 60 }} />
+            </label>
+            <label
+              className="row"
+              style={{ gap: 6, alignItems: 'center', padding: '6px 10px', borderRadius: 8,
+                border: `1px solid ${armed ? '#f85149' : 'var(--border)'}`,
+                background: armed ? '#f8514915' : 'transparent' }}
+              title="Off: fill the forms and stop before Submit. On: actually send them."
+            >
+              <input type="checkbox" checked={armed} onChange={(e) => setArmed(e.target.checked)} />
+              <span style={{ color: armed ? '#f85149' : 'inherit', fontWeight: 600 }}>Send for real</span>
+            </label>
+            <button className="primary" disabled={busy} onClick={run}>
+              {busy ? 'Working…' : armed ? '⚠ Apply for real' : '🧪 Dry run'}
+            </button>
+          </div>
+        </div>
+        {armed && (
+          <div className="muted" style={{ marginTop: 8, color: '#f85149' }}>
+            Applications will be submitted to real employers under your name and cannot be taken back.
+          </div>
+        )}
+      </div>
+
+      {questions.length > 0 && (
+        <div className="card" style={{ borderColor: '#d29922', background: '#d2992211' }}>
+          <div className="label" style={{ color: '#d29922' }}>
+            ❓ {questions.length} question{questions.length === 1 ? '' : 's'} waiting on you
+          </div>
+          <div className="muted">
+            Forms asked these and your answer bank had nothing for them. Rather than guess a fact
+            about you, the run stopped. Answer once and every job asking the same thing continues.
+          </div>
+          <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 10 }}>
+            {questions.map((q) => (
+              <div key={q.field_key} style={{ borderTop: '1px solid var(--border)', paddingTop: 10 }}>
+                <div><strong>{q.label || q.field_key}</strong></div>
+                <div className="muted" style={{ fontSize: 12, marginBottom: 6 }}>{q.field_key}</div>
+                <div className="row" style={{ gap: 6, flexWrap: 'wrap' }}>
+                  {q.options && q.options.length ? (
+                    <select
+                      value={drafts[q.field_key] ?? ''}
+                      onChange={(e) => setDrafts((d) => ({ ...d, [q.field_key]: e.target.value }))}
+                      style={{ minWidth: 220 }}
+                    >
+                      <option value="">Pick one…</option>
+                      {q.options.map((o) => <option key={o} value={o}>{o}</option>)}
+                    </select>
+                  ) : (
+                    <input
+                      value={drafts[q.field_key] ?? ''}
+                      placeholder="Your answer"
+                      onChange={(e) => setDrafts((d) => ({ ...d, [q.field_key]: e.target.value }))}
+                      style={{ flex: 1, minWidth: 220 }}
+                    />
+                  )}
+                  <button className="primary" disabled={!(drafts[q.field_key] || '').trim()} onClick={() => answer(q)}>
+                    Save
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {result && (
+        <div className="card">
+          <div className="label">
+            Last run — {result.armed ? 'live' : 'dry run'}: {result.applied || 0} applied ·{' '}
+            {result.dryRun || 0} filled &amp; held · {result.needsInput || 0} waiting on you ·{' '}
+            {result.skipped || 0} skipped · {result.errors || 0} error(s)
+          </div>
+          <div className="table-wrap" style={{ marginTop: 8, maxHeight: 320, overflowY: 'auto' }}>
+            <table>
+              <thead><tr><th>Job</th><th>Outcome</th></tr></thead>
+              <tbody>
+                {(result.results || []).map((r) => (
+                  <tr key={r.job_id}>
+                    <td>
+                      <div><strong>{r.title || r.job_id}</strong></div>
+                      <div className="muted" style={{ fontSize: 12 }}>{r.company} · {r.connector}</div>
+                    </td>
+                    <td>
+                      <div><span className="tag">{r.state}</span></div>
+                      <div className="muted" style={{ fontSize: 12 }}>{r.note}</div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
