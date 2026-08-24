@@ -61,6 +61,10 @@ you to prove you're human.
 - **Scheduled runs** — repeat a batch every 20 minutes to 8 hours. Guarded by a daily
   cap derived from applications actually sent, so no restart or second window can reset
   it, and by a one-run-at-a-time lock
+- **Salary expectations convert themselves.** One figure in your own currency becomes
+  the right figure for the employer's country — at equal *purchasing power*, not at the
+  exchange rate, because a straight conversion underprices you several times over. Both
+  numbers are logged, and a figure you set for a market always wins
 - **Notice period is computed, not stored.** Give it your last working day and every
   "notice period" answer is worked out from the date — right today and right in six
   weeks. Dropdowns get the bucket the real figure falls into, always rounding *up*
@@ -186,6 +190,7 @@ node scripts/test-autofill.mjs           # autofill end-to-end against a real fo
 node scripts/test-observer-escaping.mjs  # guards the observer's template-literal escapes
 node scripts/test-notice-period.mjs      # notice-period arithmetic and dropdown bucketing
 node scripts/test-location-mix.mjs       # how a batch is composed by location
+node scripts/test-salary-expectation.mjs # currency detection and salary conversion
 node scripts/clean-answer-bank.mjs       # audit the answer bank (dry run)
 node scripts/check-canon-parity.mjs      # field-key canonicaliser parity check
 npm run install-launcher                 # desktop launcher (macOS)

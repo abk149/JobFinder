@@ -147,6 +147,38 @@ in practice its worldwide places go to remote roles before local ones, and if th
 no remote roles either, the batch is simply all local. Nothing is ever left empty
 because a bucket ran dry.
 
+### Salary expectations abroad
+
+Your expectation lives in the answer bank as one figure in one currency. Typing it into
+a form in Berlin is not a rounding error — it is a number about thirty times too large,
+and it ends the conversation. So it is converted for the employer's country.
+
+**It converts at purchasing power, not at the exchange rate.** Both are defensible and
+they give very different answers:
+
+| | ₹30,00,000 becomes |
+|---|---|
+| exchange rate — what your money is worth if you change it | USD 36,000 |
+| purchasing power — what it takes to live the same way there | **USD 130,000** |
+
+Nobody in the US is hired at 36,000, so asking that underprices you roughly threefold
+and is very hard to walk back. Purchasing power is the honest basis for "what would I
+need to move", which is what the question is really asking.
+
+**Be aware of what it does not know.** It has no idea what the role pays in that city.
+The figure is a like-for-like translation of *your* number, not a market rate — treat it
+as a starting point and sanity-check the first few in the dry-run screenshots.
+
+To fix a figure for one market yourself, add an answer in the Answer bank keyed
+`expected salary usd` (or `gbp`, `eur`, `aed`, …). Yours always wins over anything
+computed.
+
+Which currency a form wants is read from the form first and the job's country second, so
+"Expected CTC in INR" on a Dubai job correctly stays in rupees. When neither says — a
+bare `$` box on a job with no country — it does **not** guess, because the difference
+between USD and SGD is a third of the number. It asks you instead, and the question names
+the problem.
+
 ### Naukri early access
 
 Naukri shows a set of roles recruiters are searching for *before* they post the job.

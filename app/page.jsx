@@ -2817,6 +2817,14 @@ function AutoApplyPanel({ profileId, flash }) {
               becomes a question below, and that application waits.
             </div>
             <div className="muted" style={{ marginTop: 6 }}>
+              Salary expectations are converted for the employer&apos;s country at equal{' '}
+              <strong>purchasing power</strong>, not at the exchange rate — ₹30,00,000 asks for about
+              USD 130,000, where a straight conversion would say 36,000 and badly underprice you. Both
+              figures go in the log. To fix a figure for one market yourself, add an answer keyed{' '}
+              <code>expected salary usd</code> (or <code>gbp</code>, <code>eur</code>, …) in the Answer
+              bank — yours always wins.
+            </div>
+            <div className="muted" style={{ marginTop: 6 }}>
               {eligible} job{eligible === 1 ? '' : 's'} to try
               {Object.keys(byConnector).length
                 ? ` (${Object.entries(byConnector).map(([k, v]) => `${k}: ${v}`).join(', ')})`
