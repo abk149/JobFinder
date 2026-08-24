@@ -51,6 +51,10 @@ export default function Dashboard() {
   const [panel, setPanel] = useState(null); // { id, kind: 'gap' | 'intel' }
   const [sortByFit, setSortByFit] = useState(true);
   const [hideDupes, setHideDupes] = useState(true);
+  // Applications already sent are hidden by default. Auto-apply can send twenty in a
+  // batch, and every one of them stayed in this list looking actionable — the whole
+  // point of the list is what is left TO do.
+  const [hideApplied, setHideApplied] = useState(true);
   const [minFit, setMinFit] = useState(0);
 
   const flash = (msg) => { setToast(msg); setTimeout(() => setToast(null), 4000); };
@@ -82,13 +86,27 @@ export default function Dashboard() {
       list = out;
     }
 
+    if (hideApplied) {
+      // Anything that has reached the employer, however it got there: sent by
+      // auto-apply, marked applied by you, or a board telling us you had already
+      // applied. Later pipeline stages are hidden too — a job at Interview does not
+      // belong in a list of things to apply to. The Tracker still shows all of it.
+      const done = new Set(['applied', 'screening', 'interview', 'offer', 'rejected']);
+      list = list.filter((j) => !(
+        done.has(j.status)
+        || j.auto_apply_state === 'applied'
+        || j.auto_apply_state === 'already_applied'
+        || j.auto_apply_state === 'applied_incomplete'
+      ));
+    }
+
     if (minFit > 0) list = list.filter((j) => (j.fit_score ?? -1) >= minFit);
 
     if (sortByFit) {
       list.sort((a, b) => (b.fit_score ?? -1) - (a.fit_score ?? -1) || (b.discovered_at || 0) - (a.discovered_at || 0));
     }
     return list;
-  }, [jobs, hideDupes, sortByFit, minFit]);
+  }, [jobs, hideDupes, hideApplied, sortByFit, minFit]);
 
   const loadProfiles = useCallback(async () => {
     const r = await fetch('/api/profiles').then((r) => r.json());
@@ -553,7 +571,7 @@ export default function Dashboard() {
                     <div className="row" style={{ justifyContent: 'space-between' }}>
                       <div className="muted">
                         {visibleJobs.length} shown
-                        {jobs.length !== visibleJobs.length && ` · ${jobs.length - visibleJobs.length} hidden (duplicates / below threshold)`}
+                        {jobs.length !== visibleJobs.length && ` · ${jobs.length - visibleJobs.length} hidden (applied / duplicates / below threshold)`}
                       </div>
                       <div className="row" style={{ gap: 14 }}>
                         <label className="muted" style={{ cursor: 'pointer' }}>
@@ -563,6 +581,10 @@ export default function Dashboard() {
                         <label className="muted" style={{ cursor: 'pointer' }} title="The same role scraped from several boards counts once">
                           <input type="checkbox" checked={hideDupes} onChange={(e) => setHideDupes(e.target.checked)} style={{ width: 'auto', marginRight: 5 }} />
                           merge duplicates
+                        </label>
+                        <label className="muted" style={{ cursor: 'pointer' }} title="Jobs you have already applied to — including everything auto-apply sent. They stay in the Tracker.">
+                          <input type="checkbox" checked={hideApplied} onChange={(e) => setHideApplied(e.target.checked)} style={{ width: 'auto', marginRight: 5 }} />
+                          hide applied
                         </label>
                       </div>
                     </div>
@@ -2724,14 +2746,33 @@ function AutoApplyPanel({ profileId, flash }) {
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState(null);
   const [drafts, setDrafts] = useState({});
+  const [sched, setSched] = useState(null);
 
   const load = useCallback(async () => {
     const r = await fetch(`/api/autoapply?profile_id=${profileId}`).then((x) => x.json()).catch(() => ({}));
     setQuestions(r.questions || []);
     setEligible(r.eligible || 0);
     setByConnector(r.byConnector || {});
+    const s = await fetch(`/api/autoapply/schedule?profile_id=${profileId}`).then((x) => x.json()).catch(() => null);
+    if (s && !s.error) setSched(s);
   }, [profileId]);
   useEffect(() => { load(); }, [load]);
+  // While a schedule is on, keep the panel honest about when it next fires.
+  useEffect(() => {
+    if (!sched?.enabled) return undefined;
+    const t = setInterval(load, 30000);
+    return () => clearInterval(t);
+  }, [sched?.enabled, load]);
+
+  async function saveSchedule(patch) {
+    const s = await fetch('/api/autoapply/schedule', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ profile_id: profileId, ...sched, ...patch }),
+    }).then((x) => x.json());
+    if (!s.error) { setSched(s); flash?.(s.enabled ? 'Schedule saved.' : 'Schedule stopped.'); }
+    else flash?.(s.error);
+  }
 
   async function answer(q) {
     const value = (drafts[q.field_key] ?? '').trim();
@@ -2813,6 +2854,75 @@ function AutoApplyPanel({ profileId, flash }) {
           </div>
         )}
       </div>
+
+      {sched && (
+        <div
+          className="card"
+          style={sched.enabled
+            ? { borderColor: sched.armed ? '#f85149' : '#3fb950', background: sched.armed ? '#f8514911' : '#3fb95011' }
+            : undefined}
+        >
+          <div className="row" style={{ justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 12 }}>
+            <div>
+              <div className="label">
+                ⏰ Run on a schedule
+                {sched.enabled && (
+                  <span style={{ color: sched.armed ? '#f85149' : '#3fb950' }}>
+                    {' '}· on, {sched.armed ? 'SENDING FOR REAL' : 'dry runs only'}
+                  </span>
+                )}
+              </div>
+              <div className="muted">
+                Repeats a batch by itself. {sched.enabled && sched.nextRunAt
+                  ? `Next run ${new Date(sched.nextRunAt).toLocaleTimeString()}.`
+                  : 'Off.'}
+                {sched.running ? ' A run is in progress.' : ''}
+              </div>
+              {sched.armed && (
+                <div className="muted" style={{ marginTop: 4 }}>
+                  Sent today: <strong>{sched.sentToday}</strong> of {sched.dailyCap} allowed. The cap counts
+                  applications actually sent, so restarting the app cannot reset it.
+                </div>
+              )}
+            </div>
+            <div className="row" style={{ gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+              <label className="muted" style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                every
+                <select value={sched.everyMinutes} onChange={(e) => setSched({ ...sched, everyMinutes: Number(e.target.value) })}>
+                  {[20, 30, 60, 120, 240, 480].map((m) => (
+                    <option key={m} value={m}>{m < 60 ? `${m} min` : `${m / 60} hr`}</option>
+                  ))}
+                </select>
+              </label>
+              <label className="muted" style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                jobs
+                <input type="number" min="1" max="25" value={sched.limit}
+                  onChange={(e) => setSched({ ...sched, limit: Number(e.target.value) })} style={{ width: 56 }} />
+              </label>
+              <label className="muted" style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                cap/day
+                <input type="number" min="1" max="200" value={sched.dailyCap}
+                  onChange={(e) => setSched({ ...sched, dailyCap: Number(e.target.value) })} style={{ width: 62 }} />
+              </label>
+              <label className="row" style={{ gap: 6, alignItems: 'center', padding: '6px 10px', borderRadius: 8,
+                border: `1px solid ${sched.armed ? '#f85149' : 'var(--border)'}` }}>
+                <input type="checkbox" checked={!!sched.armed} onChange={(e) => setSched({ ...sched, armed: e.target.checked })} />
+                <span style={{ color: sched.armed ? '#f85149' : 'inherit', fontWeight: 600 }}>Send for real</span>
+              </label>
+              {sched.enabled
+                ? <button className="danger" onClick={() => saveSchedule({ enabled: false })}>Stop</button>
+                : <button className="primary" onClick={() => saveSchedule({ enabled: true })}>Start</button>}
+              {sched.enabled && <button onClick={() => saveSchedule({ enabled: true })}>Apply changes</button>}
+            </div>
+          </div>
+          {sched.enabled && sched.armed && (
+            <div className="muted" style={{ marginTop: 8, color: '#f85149' }}>
+              This keeps sending applications while JobFinder is running, without asking again.
+              It resumes after a restart — stop it here when you are done.
+            </div>
+          )}
+        </div>
+      )}
 
       {questions.length > 0 && (
         <div className="card" style={{ borderColor: '#d29922', background: '#d2992211' }}>

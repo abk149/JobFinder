@@ -135,12 +135,44 @@ submissions: ten applications arriving at one board simultaneously is the cleare
 automation signal either site gets, and the penalty is a restricted account — which
 costs you the logged-in session everything else here depends on.
 
+### Running it on a schedule
+
+The Auto-apply tab can repeat a batch by itself — every 20 minutes, hourly, or as slow
+as 8 hours. Set the interval and how many jobs per board, then **Start**.
+
+It has the same arming switch, and this one *is* remembered, because a scheduler you
+must re-arm after every restart is not a scheduler. What makes that safe is the **daily
+cap**: it counts applications actually sent today, read from your job list rather than
+from a counter the app keeps, so restarting JobFinder, opening a second window or
+crashing mid-run cannot reset it to zero. When the cap is reached the schedule holds
+until tomorrow rather than stopping.
+
+Two more brakes worth knowing about: only one run happens at a time per profile (a batch
+that overruns its interval delays the next one instead of stacking a second on top), and
+the schedule announces itself in the terminal on every start, so a background sender can
+never come back quietly after a restart.
+
+Stop it from the same panel when you are done.
+
+### Jobs you have already applied to
+
+The main job list hides them by default — including everything auto-apply sent, and
+anything a board told us you had already applied to. A batch of twenty otherwise leaves
+twenty entries that look actionable and are not. Untick **hide applied** to see them, or
+use the Tracker, which always shows the full pipeline.
+
 **Sign in to both boards — it is the difference between a handful of applyable jobs and
 a hundred.** A keyword search is not where either site keeps the work you can apply to
 without leaving it. Naukri's signed-in homepage feeds ("jobs based on your profile" and
 "based on your applies") are mostly jobs that apply on Naukri, while a keyword search of
 the same profile returned 24 postings that were *all* "Apply on company site". LinkedIn
-is the same story through its Easy Apply collection. Both are scanned automatically when
+is the same story through its Easy Apply collection, and LinkedIn is searched four ways
+because each reaches jobs the others miss: that collection, your keywords in your own
+location, your keywords **worldwide**, and remote-only. Location is the lowest-priority
+filter here — a job you can apply to in one click is worth seeing even if it sits
+somewhere you would not have searched. On one profile the worldwide pass returned
+34,000+ Easy Apply results against 2,000+ for India alone, and pulled in roles in
+Switzerland, New Zealand, Qatar and the UAE. All of these are scanned automatically when
 a signed-in session exists, and skipped silently when it does not.
 
 **A batch of 10 means 10 real attempts.** Postings that turn out to redirect to the

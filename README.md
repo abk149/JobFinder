@@ -23,7 +23,9 @@ you to prove you're human.
 **Finding work**
 - **Signed-in sources.** Beyond keyword search, a signed-in session unlocks the feeds
   that actually carry applyable work: Naukri's profile recommendations and LinkedIn's
-  Easy Apply collection. On one profile these took the applyable pool from 8 jobs to 103
+  Easy Apply collection, searched worldwide as well as locally so good jobs abroad are
+  not filtered out by a location you happened to type. On one profile these took the
+  applyable pool from 8 jobs to 103
 - 21 connectors: Arbeitnow, Bluesky, Hacker News, Himalayas, Jobicy, Jobspresso,
   LinkedIn, LinkedIn Posts, Naukri, NoDesk, Otta, Psychology, Reddit, RemoteOK,
   Remotive, TechStartups, The Muse, Wellfound, We Work Remotely, Working Nomads,
@@ -51,12 +53,15 @@ you to prove you're human.
   every job waiting on the same question
 - **Dry run by default** — fills every field, screenshots the completed form, and stops
   before Submit. Sending for real is a checkbox that is never remembered between runs
+- **Scheduled runs** — repeat a batch every 20 minutes to 8 hours. Guarded by a daily
+  cap derived from applications actually sent, so no restart or second window can reset
+  it, and by a one-run-at-a-time lock
 - **Notice period is computed, not stored.** Give it your last working day and every
   "notice period" answer is worked out from the date — right today and right in six
   weeks. Dropdowns get the bucket the real figure falls into, always rounding *up*
 - **Applyable jobs are identified while scanning.** Naukri's own recommendation feed
   ("jobs based on your profile / your applies") reports which postings apply on Naukri
-  and which redirect to the employer; LinkedIn's Easy Apply feed and filter are walked
+  and which redirect to the employer; LinkedIn's Easy Apply collection is walked
   separately. So a batch of 10 means 10 real attempts, not 10 postings that turn out to
   be someone else's application form
 - Capped per run, with human pacing between applications, because both sites treat a

@@ -17,9 +17,10 @@ import { jobId, buildKeywordQuery, firstLocation, safeText, safeAttr, humanDelay
 // live: HTTP 200, 10 cards, title/company/location/href all populated.
 const GUEST_SEARCH = 'https://www.linkedin.com/jobs-guest/jobs/api/seeMoreJobPostings/search';
 const PAGES = 3;          // 10 cards per page
-// Easy Apply pages to walk per feed. 25 cards a page, so 4 covers ~100 postings — past
-// that the results stop being relevant faster than they add value.
-const EASY_APPLY_PAGES = 4;
+// Easy Apply pages to walk per feed. 25 cards a page across four feeds, so this is up
+// to ~500 postings a scan. The cap is pacing, not relevance: LinkedIn starts refusing
+// requests if you walk it faster than this.
+const EASY_APPLY_PAGES = Number(process.env.JOBFINDER_EASY_APPLY_PAGES || 5);
 const PER_PAGE = 10;
 
 export default {
@@ -99,10 +100,25 @@ export default {
       // Best-effort: it needs a signed-in session, and without one the guest results
       // above stand on their own exactly as before.
       try {
+        // Four feeds, because each one reaches jobs the others do not.
+        //
+        // Measured Easy Apply result counts for the same keywords:
+        //     location = your primary       2,000+
+        //     geoId    = 92000000 (World)  34,000+
+        //     remote only (f_WT=2)            400+
+        //
+        // Worldwide is not a nicety: it is the only one of these that surfaces roles
+        // outside India, and it returned postings in New Zealand and Switzerland
+        // alongside the Indian ones. Location is the lowest-priority filter here — a
+        // job you can apply to in one click is worth seeing even if it sits somewhere
+        // you had not thought to search.
+        const q = encodeURIComponent(kw);
         const feeds = [
+          // LinkedIn's own "jobs you can apply to in one click", built from your profile.
           'https://www.linkedin.com/jobs/collections/easy-apply/',
-          `https://www.linkedin.com/jobs/search/?f_AL=true&keywords=${encodeURIComponent(kw)}`
-            + `&location=${encodeURIComponent(loc)}`,
+          `https://www.linkedin.com/jobs/search/?f_AL=true&keywords=${q}&location=${encodeURIComponent(loc)}`,
+          `https://www.linkedin.com/jobs/search/?f_AL=true&keywords=${q}&geoId=92000000`,
+          `https://www.linkedin.com/jobs/search/?f_AL=true&keywords=${q}&f_WT=2`,
         ];
         const readCards = () => page.evaluate(() => {
           const text = (el) => (el?.innerText || '').trim().split('\n')[0].trim();

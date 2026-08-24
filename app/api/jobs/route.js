@@ -1,10 +1,12 @@
 import { all, run } from '../../../lib/db.js';
 import { readJson, requireFields, withErrorHandling } from '../../../lib/http.js';
 import { freshnessOf, isFresh } from '../../../lib/freshness.js';
+import { ensureSchedulerStarted } from '../../../lib/schedulerBoot.js';
 
 export const dynamic = 'force-dynamic';
 
 export async function GET(req) {
+  ensureSchedulerStarted();
   const { searchParams } = new URL(req.url);
   const profile_id = searchParams.get('profile_id');
   if (!profile_id) return Response.json({ error: 'profile_id required' }, { status: 400 });
