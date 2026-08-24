@@ -2755,11 +2755,15 @@ function AutoApplyPanel({ profileId, flash }) {
               {Object.keys(byConnector).length
                 ? ` (${Object.entries(byConnector).map(([k, v]) => `${k}: ${v}`).join(', ')})`
                 : ''}
+              {' — '}the two boards run at the same time. Postings past their freshness
+              window are left out: they have almost always expired, and trying them is
+              where a run&apos;s time used to go.
             </div>
           </div>
           <div className="row" style={{ gap: 8, alignItems: 'center' }}>
-            <label className="muted" style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-              max
+            <label className="muted" style={{ display: 'flex', alignItems: 'center', gap: 5 }}
+              title="Per board — 10 means 10 LinkedIn and 10 Naukri, run in parallel">
+              max per board
               <input type="number" min="1" max="25" value={limit}
                 onChange={(e) => setLimit(e.target.value)} style={{ width: 60 }} />
             </label>
@@ -2830,7 +2834,12 @@ function AutoApplyPanel({ profileId, flash }) {
       {result && (
         <div className="card">
           <div className="label">
-            Last run — {result.armed ? 'live' : 'dry run'}: {result.applied || 0} applied ·{' '}
+            Last run — {result.armed ? 'live' : 'dry run'}
+            {result.tookSeconds != null ? ` in ${result.tookSeconds}s` : ''}
+            {result.perConnector
+              ? ` (${Object.entries(result.perConnector).map(([k, v]) => `${k}: ${v}`).join(', ')})`
+              : ''}
+            : {result.applied || 0} applied ·{' '}
             {result.dryRun || 0} filled &amp; held · {result.needsInput || 0} waiting on you ·{' '}
             {result.skipped || 0} skipped · {result.errors || 0} error(s)
           </div>

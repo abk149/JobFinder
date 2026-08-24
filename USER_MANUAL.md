@@ -125,9 +125,22 @@ step, so a dry run can walk the whole thing and back out. On Naukri, clicking *A
 **is** the submission — there is nothing to stop at — so a dry run does not click it at
 all and reports what it would have done.
 
-**On the cap.** Both sites read a burst of applications as automation, and an account
-restriction costs you the logged-in session everything else here depends on. The cap is
-10 per run by default and 25 at most, with a pause between each.
+**The cap is per board, and the boards run at the same time.** "10" means 10 LinkedIn
+*and* 10 Naukri, worked through in parallel — the run takes as long as the slower board,
+not the sum of both.
+
+Within a single board it is more careful than that. A dry run opens a few tabs at once,
+since it submits nothing. A live run goes one at a time with a human gap between
+submissions: ten applications arriving at one board simultaneously is the clearest
+automation signal either site gets, and the penalty is a restricted account — which
+costs you the logged-in session everything else here depends on.
+
+**Stale postings are skipped, not tried.** Naukri listings are only considered for 10
+days and LinkedIn for 21, and within that window today's jobs are always tried first.
+This matters more than it sounds: a run ordered by fit score alone spent its entire
+budget on high-scoring postings that had expired weeks earlier — 8 expired, 1 already
+applied, 1 external, nothing applied to. If a board shows few eligible jobs, scan again
+rather than widening the window.
 
 ### Autofill modes
 

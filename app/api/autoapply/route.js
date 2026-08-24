@@ -9,7 +9,7 @@
 // wrong is applications sent to real employers.
 
 import { get } from '../../../lib/db.js';
-import { autoApplyRun, eligibleJobs } from '../../../lib/autoApply.js';
+import { autoApplyRun, eligibleByConnector } from '../../../lib/autoApply.js';
 import { listNeedsInput, countNeedsInput } from '../../../lib/answerBank.js';
 import { readJson, requireFields, withErrorHandling, HttpError } from '../../../lib/http.js';
 import { lcmd, lwarn } from '../../../lib/logger.js';
@@ -27,14 +27,15 @@ export const POST = withErrorHandling(async (req) => {
   // Only the literal boolean true arms it. A truthy "false" string from a form post
   // must not be able to send applications.
   const armed = body.armed === true;
-  // Hard ceiling regardless of what the caller asks for. Both sites treat a burst of
-  // applications as automation, and losing the logged-in session costs more than the
-  // extra applications are worth.
+  // PER BOARD, not in total: 10 means 10 LinkedIn and 10 Naukri, worked through at the
+  // same time. Hard ceiling regardless of what the caller asks for — both sites treat a
+  // burst of applications as automation, and losing the logged-in session costs more
+  // than the extra applications are worth.
   const limit = Math.max(1, Math.min(Number(body.limit) || 10, 25));
 
   lcmd(profile_id, armed
-    ? `▶ Auto-apply — ARMED, will submit up to ${limit} application(s)`
-    : `▶ Auto-apply — dry run, filling up to ${limit} form(s), submitting none`);
+    ? `▶ Auto-apply — ARMED, up to ${limit} application(s) per board, LinkedIn and Naukri in parallel`
+    : `▶ Auto-apply — dry run, up to ${limit} form(s) per board in parallel, submitting none`);
 
   const summary = await autoApplyRun(profile, { armed, limit });
   summary.needsInputTotal = await countNeedsInput(profile_id);
@@ -48,13 +49,14 @@ export async function GET(req) {
   const { searchParams } = new URL(req.url);
   const profile_id = searchParams.get('profile_id');
   if (!profile_id) return Response.json({ error: 'profile_id required' }, { status: 400 });
-  const [questions, jobs] = await Promise.all([
+  const [questions, pools] = await Promise.all([
     listNeedsInput(profile_id),
-    eligibleJobs(profile_id, 200),
+    eligibleByConnector(profile_id, 200),
   ]);
+  const byConnector = Object.fromEntries(Object.entries(pools).map(([c, r]) => [c, r.length]));
   return Response.json({
     questions,
-    eligible: jobs.length,
-    byConnector: jobs.reduce((a, j) => ({ ...a, [j.connector]: (a[j.connector] || 0) + 1 }), {}),
+    eligible: Object.values(byConnector).reduce((n, v) => n + v, 0),
+    byConnector,
   });
 }
