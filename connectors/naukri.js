@@ -1,4 +1,4 @@
-import { jobId, buildKeywordQuery, firstLocation, safeText, safeAttr, humanDelay, waitForCaptcha, detectWall } from './_util.js';
+import { jobId, buildKeywordQuery, firstLocation, safeText, safeAttr, humanDelay, waitForCaptcha, detectWall, wallError } from './_util.js';
 
 // Naukri sits behind Akamai bot protection. From a fresh automated browser it answers
 // "Access Denied" (measured: HTTP 403) — it generally only works once you have logged
@@ -24,15 +24,15 @@ export default {
     const res = await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 40000 });
     if (res && res.status() === 403) {
       await page.close().catch(() => {});
-      throw new Error('Naukri blocked the request (Akamai "Access Denied"). Open Sources → Naukri → "Open & log in", sign in, leave that window open, then scan again.');
+      throw wallError('login', 'Naukri blocked the request (Akamai "Access Denied"). Sign in on the window I opened, leave it open, then scan again.');
     }
     await waitForCaptcha(page);
     const wall = await detectWall(page);
     if (wall) {
       await page.close().catch(() => {});
-      throw new Error(wall === 'blocked'
-        ? 'Naukri blocked the request. Open Sources → Naukri → "Open & log in", sign in, leave that window open, then scan again.'
-        : 'Naukri is asking you to sign in. Open Sources → Naukri → "Open & log in", then scan again.');
+      throw wall === 'blocked'
+        ? wallError('blocked', 'Naukri blocked the request. Try again later — signing in will not help.')
+        : wallError(wall, 'Naukri is asking you to sign in. Sign in on the window I opened, then scan again.');
     }
     await humanDelay(2500, 4500);
 

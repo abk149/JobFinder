@@ -82,7 +82,15 @@ import crypto from 'node:crypto';
   console.log(`  Why interested (LLM)     → "${(values.why || '').slice(0, 220)}${values.why?.length > 220 ? '…' : ''}"`);
 
   await ctx.close();
-  fs.rmSync(path.join(process.cwd(), 'data', 'sessions', profileId), { recursive: true, force: true });
+  // Chrome keeps flushing profile files for a moment after the context closes, and a
+  // file appearing mid-walk makes rmSync throw ENOTEMPTY even with recursive:true.
+  // That threw AFTER every assertion had already passed, which made a green run look
+  // like a failure. Retry briefly, and never let cleanup fail the test.
+  const sessionPath = path.join(process.cwd(), 'data', 'sessions', profileId);
+  for (let i = 0; i < 5; i++) {
+    try { fs.rmSync(sessionPath, { recursive: true, force: true }); break; }
+    catch { await new Promise((r) => setTimeout(r, 400)); }
+  }
   await run('DELETE FROM answers WHERE profile_id = ?', [profileId]);
   await run('DELETE FROM profiles WHERE id = ?', [profileId]);
 

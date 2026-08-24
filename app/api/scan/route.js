@@ -4,7 +4,7 @@
 import crypto from 'node:crypto';
 import { harvestFromJob } from '../../../lib/contacts.js';
 import { get, run, all } from '../../../lib/db.js';
-import { getContext } from '../../../lib/browser.js';
+import { getContext, openLogin } from '../../../lib/browser.js';
 import { CONNECTORS, getConnector } from '../../../connectors/index.js';
 import { isStealthEnabled } from '../../../lib/profileSettings.js';
 import { readJson, requireFields, withErrorHandling, HttpError } from '../../../lib/http.js';
@@ -24,6 +24,33 @@ export const POST = withErrorHandling(async (req) => {
 
   lcmd(profile_id, `▶ Scan ${targets.length} source(s)`);
   const scanStart = Date.now();
+
+  // ── Interrupt you only when you are actually needed ────────────────────────
+  //
+  // The scan itself is headless and silent. The one thing it cannot do on your
+  // behalf is sign in or clear a human-check, so those — and nothing else — raise
+  // a real window.
+  //
+  // Capped at ONE window per scan. Without the cap a scan where the LinkedIn cookie
+  // had expired would open a window for `linkedin`, another for `linkedinposts`, and
+  // another for `naukri`, which is the pile-up this whole change exists to stop. One
+  // sign-in usually fixes the rest anyway, and the log still names every source.
+  let attentionRaised = false;
+  const needsYou = [];
+  async function requestAttention(c, kind, message) {
+    needsYou.push({ connector: c.id, kind, message });
+    if (attentionRaised) {
+      lwarn(profile_id, `  ⚠ ${c.id}: also needs you — ${message}`);
+      return;
+    }
+    attentionRaised = true;
+    lwarn(profile_id, `  🔔 ${c.id}: opening a window — ${message}`);
+    try {
+      await openLogin(profile_id, c.id, c.loginUrl, { stealth: isStealthEnabled(profile) });
+    } catch (e) {
+      lerr(profile_id, `  ✗ could not open the sign-in window: ${e?.message || e}`);
+    }
+  }
 
   // Split connectors into two pools so we can parallelize aggressively where it's
   // safe and serialize where it isn't.
@@ -50,10 +77,12 @@ export const POST = withErrorHandling(async (req) => {
     linfo(profile_id, `  ${c.requiresBrowser === false ? '⚡' : '🌐'} ${c.id}: starting…`);
     try {
       const needsBrowser = c.requiresBrowser !== false;
-      // Scan windows run OFF-SCREEN — invisible to the user, but a real Chrome
-      // window to anti-bot systems (keeps the Cloudflare pass rate of visible mode).
+      // Scanning runs headless, in its own browser directory, with a copy of your
+      // cookies. It never opens a window and never takes focus, so a scan can run
+      // while you work. (The previous "off-screen window" was not off-screen at all —
+      // macOS clamped it back on top of whatever you were doing.)
       const ctx = needsBrowser
-        ? await getContext(profile_id, c.id, { headless: false, stealth: isStealthEnabled(profile), offscreen: true })
+        ? await getContext(profile_id, c.id, { headless: true, stealth: isStealthEnabled(profile), offscreen: true })
         : null;
       // Hard per-connector budget. One slow or wedged source must never stall the
       // whole scan — previously LinkedIn and Naukri could sit in a 90s CAPTCHA wait
@@ -104,6 +133,11 @@ export const POST = withErrorHandling(async (req) => {
       }
     } catch (e) {
       error = String(e?.message || e);
+      // 'blocked' is deliberately excluded — you cannot click your way out of an IP
+      // ban, so raising a window for it would be pure interruption.
+      if ((e?.wall === 'login' || e?.wall === 'captcha') && c.loginUrl) {
+        await requestAttention(c, e.wall, error);
+      }
     }
     await run(
       'UPDATE scan_runs SET finished_at=?, found=?, error=? WHERE id=?',
@@ -162,7 +196,10 @@ export const POST = withErrorHandling(async (req) => {
 
   const totalFound = results.reduce((s, r) => s + (r.found || 0), 0);
   lcmd(profile_id, `■ Scan done — ${totalFound} new job${totalFound === 1 ? '' : 's'} across ${results.length} sources in ${((Date.now() - scanStart) / 1000).toFixed(1)}s`);
-  return Response.json({ results });
+  if (needsYou.length) {
+    lwarn(profile_id, `  🔔 ${needsYou.length} source(s) need you to sign in: ${needsYou.map((n) => n.connector).join(', ')}`);
+  }
+  return Response.json({ results, needsYou });
 });
 
 export async function GET(req) {

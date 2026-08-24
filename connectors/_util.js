@@ -283,6 +283,21 @@ export async function fetchJsonViaBrowser(ctx, url, { headers = {}, page: existi
   }
 }
 
+// A failure YOU can fix, tagged as such.
+//
+// A background scan is silent on purpose, which creates one problem: when a source
+// needs you to sign in or clear a human-check, staying silent means the source just
+// quietly returns nothing, forever. So walls are thrown with a marker, and the scan
+// route surfaces exactly those — and only those — by opening a real window.
+//
+// `kind` is 'login' or 'captcha' (things you can resolve) or 'blocked' (things you
+// cannot — those must NOT raise a window, since no amount of clicking fixes an IP ban).
+export function wallError(kind, message) {
+  const e = new Error(message);
+  e.wall = kind;
+  return e;
+}
+
 // Recognise the common "you are not getting in" pages so a connector can report
 // something actionable instead of silently returning zero rows.
 export async function detectWall(page) {

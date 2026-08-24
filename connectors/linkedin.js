@@ -1,4 +1,4 @@
-import { jobId, buildKeywordQuery, firstLocation, safeText, safeAttr, humanDelay, detectWall } from './_util.js';
+import { jobId, buildKeywordQuery, firstLocation, safeText, safeAttr, humanDelay, detectWall, wallError } from './_util.js';
 
 // LinkedIn jobs via the PUBLIC guest endpoint.
 //
@@ -45,7 +45,7 @@ export default {
           // 429 is LinkedIn rate-limiting us; anything we already collected is good.
           if (res && res.status() === 429) break;
           const wall = await detectWall(page);
-          if (wall) throw new Error(wallMessage(wall));
+          if (wall) throw wallError(wall, wallMessage(wall));
           if (i === 0) throw new Error(`LinkedIn returned HTTP ${res ? res.status() : '(no response)'}`);
           break;
         }

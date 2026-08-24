@@ -1,4 +1,4 @@
-import { jobId, keywordList, matchesKeywords, humanDelay, waitForCaptcha, withFetched, detectWall } from './_util.js';
+import { jobId, keywordList, matchesKeywords, humanDelay, waitForCaptcha, withFetched, detectWall, wallError } from './_util.js';
 
 // Scan the LOGGED-IN LinkedIn feed + keyword search for *posts* (not the formal Jobs
 // board) where someone is announcing an opening — the classic "We're hiring! DM me /
@@ -151,7 +151,7 @@ export default {
     const loggedIn = !wall && !/\/(login|signup|authwall)/.test(page.url());
     if (!loggedIn) {
       await page.close().catch(() => {});
-      throw new Error('LinkedIn Posts needs a signed-in session. Open Sources → LinkedIn → "Open & log in", sign in, leave that window open, then scan again.');
+      throw wallError('login', 'LinkedIn Posts needs a signed-in session. Sign in on the window I opened, leave it open, then scan again.');
     }
 
     for (const url of urls) {
