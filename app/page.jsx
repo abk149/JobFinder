@@ -2912,6 +2912,11 @@ function AutoApplyPanel({ profileId, flash }) {
                 <input type="number" min="1" max="200" value={sched.dailyCap}
                   onChange={(e) => setSched({ ...sched, dailyCap: Number(e.target.value) })} style={{ width: 62 }} />
               </label>
+              <label className="muted row" style={{ gap: 5, alignItems: 'center' }}
+                title="Scan for new jobs (at most once an hour) before each run. Without this the schedule works through what is already saved and then has nothing left to do.">
+                <input type="checkbox" checked={sched.scan !== false} onChange={(e) => setSched({ ...sched, scan: e.target.checked })} />
+                also scan
+              </label>
               <label className="row" style={{ gap: 6, alignItems: 'center', padding: '6px 10px', borderRadius: 8,
                 border: `1px solid ${sched.armed ? '#f85149' : 'var(--border)'}` }}>
                 <input type="checkbox" checked={!!sched.armed} onChange={(e) => setSched({ ...sched, armed: e.target.checked })} />

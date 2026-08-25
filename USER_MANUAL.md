@@ -200,6 +200,12 @@ from a counter the app keeps, so restarting JobFinder, opening a second window o
 crashing mid-run cannot reset it to zero. When the cap is reached the schedule holds
 until tomorrow rather than stopping.
 
+**It scans as well as applies.** A schedule that only applies works through what is
+already saved and then quietly does nothing, which looks exactly like "it can't find any
+new jobs". Each run scans first when it is due — at most once an hour, since a LinkedIn
+scan walks four feeds and takes about a minute and a half. Untick **also scan** if you
+would rather scan by hand.
+
 Two more brakes worth knowing about: only one run happens at a time per profile (a batch
 that overruns its interval delays the next one instead of stacking a second on top), and
 the schedule announces itself in the terminal on every start, so a background sender can
@@ -236,9 +242,15 @@ search tells us which postings are "Apply on company site", and LinkedIn is scan
 second time through its Easy Apply filter. Anything discovered the slow way is
 remembered, so no posting costs you that lookup twice.
 
-**Jobs waiting on a question you have not answered are not retried.** They would walk
-the same form and stop at the same blank field. They return automatically the moment you
-answer it.
+**Jobs waiting on a question you have not answered are not retried, and are never
+thrown away.** They would walk the same form and stop at the same blank field, so they
+sit out every run until you answer — however long that takes — and return automatically
+the moment you do. The questions pile up in the panel meanwhile, which is the intended
+shape: answer them in a batch when it suits you and a batch of applications unblocks at
+once.
+
+Only genuine failures count against a posting's retry budget. Waiting on you is not a
+failure.
 
 **A posting that fails three times is set aside** and stops appearing in batches, so one
 form this code cannot drive can't occupy a place in every future run. That is per
