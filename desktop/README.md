@@ -32,6 +32,21 @@ Their data lives outside the application, so reinstalling or replacing the app n
 - macOS `~/Library/Application Support/JobFinder/data`
 - Windows `%APPDATA%\JobFinder\data`
 
+## Moving an existing setup in
+
+```bash
+node desktop/import-data.js         # show what would be copied, change nothing
+node desktop/import-data.js --go    # do it
+```
+
+Copies the database, resumes, screenshots, mailbox tokens and the browser profile that
+holds your logins into the packaged app's data directory. Caches, the regenerable scan
+profile and browser directories belonging to profiles the database no longer has are
+skipped — on one machine that was 14 GB skipped against 0.2 GB copied.
+
+Any existing destination is renamed aside rather than overwritten, and the import
+re-opens the copied database afterwards and fails loudly if it will not read.
+
 ## What is inside
 
 | | |

@@ -133,9 +133,10 @@ function startServer(port) {
     // Everything the user owns lives outside the app bundle, so an update or a
     // reinstall cannot take their answer bank and logins with it.
     JOBFINDER_DATA: dataDir(),
-    // Use the Chromium we ship. lib/browser.js prefers a real installed Chrome when
-    // there is one; this is the floor, not the ceiling.
-    ...(CHROMIUM ? { JOBFINDER_BROWSER_PATH: CHROMIUM } : {}),
+    // FALLBACK, not PATH. lib/browser.js tries a real installed Chrome first — that
+    // browser has history and logins, which is precisely what anti-bot systems score —
+    // and only reaches for the Chromium we ship when the machine has nothing.
+    ...(CHROMIUM ? { JOBFINDER_BROWSER_FALLBACK: CHROMIUM } : {}),
   };
   const child = spawn(NODE_BIN, [path.join(APP_DIR, 'server.js')], {
     cwd: APP_DIR,
