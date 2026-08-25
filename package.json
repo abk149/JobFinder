@@ -10,7 +10,9 @@
     "install-launcher": "node scripts/install-launcher.js",
     "build:windows": "node windows/build.js",
     "verify:windows": "node windows/verify.js",
-    "make:icon": "node windows/make-icon.js"
+    "make:icon": "node windows/make-icon.js",
+    "build:desktop": "node desktop/build.js",
+    "verify:desktop": "node desktop/verify.js"
   },
   "dependencies": {
     "better-sqlite3": "11.3.0",

@@ -127,6 +127,14 @@ This is the design constraint, not a footnote.
 - **[Ollama](https://ollama.com)** for the local LLM — optional, but autofill drafting,
   cover letters and interview prep need it
 
+## Giving it to someone else
+
+`npm run build:desktop` produces a standalone application — a real window, with Chromium and
+the Node runtime inside it, that installs the local model runtime on first launch. The
+recipient double-clicks it; there is no terminal, no `npm install`, and no localhost URL.
+See **[desktop/README.md](desktop/README.md)**, including an honest account of what the
+build does and does not do to protect the source.
+
 ## Quick start
 
 ```bash
@@ -194,6 +202,8 @@ node scripts/test-salary-expectation.mjs # currency detection and salary convers
 node scripts/clean-answer-bank.mjs       # audit the answer bank (dry run)
 node scripts/check-canon-parity.mjs      # field-key canonicaliser parity check
 npm run install-launcher                 # desktop launcher (macOS)
+npm run build:desktop                    # standalone app for macOS + Windows
+npm run verify:desktop                   # 23 structural checks on those packages
 npm run build:windows                    # windows/dist/JobFinder-Windows.zip
 npm run verify:windows                   # 22 structural checks on that bundle
 ```

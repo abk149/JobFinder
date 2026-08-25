@@ -61,3 +61,4 @@ data/gmail.json
 
 # IMAP app password — a full-mailbox credential. Never commit.
 data/mail.json
+desktop/dist/
