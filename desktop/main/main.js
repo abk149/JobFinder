@@ -191,7 +191,9 @@ async function boot() {
     return;
   }
 
-  await win.loadURL(`http://127.0.0.1:${serverPort}/`);
+  // ?shell=desktop tells the page it is inside the app window rather than a browser
+  // tab, so it can reserve the strip macOS draws its window buttons over.
+  await win.loadURL(`http://127.0.0.1:${serverPort}/?shell=desktop`);
 
   if (runtime.note) {
     dialog.showMessageBox(win, {

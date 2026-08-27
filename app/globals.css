@@ -412,3 +412,55 @@ td .row { flex-wrap: wrap; }
   * { transition: none !important; animation: none !important; }
   button:active:not(:disabled) { transform: none; }
 }
+
+/* ── Scrolling ──────────────────────────────────────────────────────────────
+   The page scrolls. Panels inside it do not, unless they are genuinely long.
+
+   Five lists used to be fixed-height scroll boxes. On a normal window that meant
+   the wheel was captured by whichever list the pointer happened to be over —
+   the page stopped moving and the list scrolled instead, which reads as the app
+   fighting you. A cap in `vh` lets short lists size to their content and only
+   engages on a list long enough to deserve it. */
+.scroll-pane {
+  max-height: min(70vh, 720px);
+  overflow-y: auto;
+  /* Deliberately NOT overscroll-behavior: contain. That stops the scroll chaining to
+     the page when the pane reaches its end, which is precisely the trapped feeling
+     this is meant to remove. The default lets the wheel carry on down the page. */
+}
+
+/* Room for the log drawer pinned to the bottom of the window.
+   Without this the last card sits permanently underneath it, and no amount of
+   scrolling reveals it — the page simply appears to end early. */
+.container { padding-bottom: calc(var(--terminal-space, 52px) + var(--s5, 24px)); }
+body.terminal-open { --terminal-space: 300px; }
+
+/* Sticky table headers: a long list scrolled past its header is a list of
+   unlabelled columns. */
+thead th {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: var(--surface);
+  box-shadow: inset 0 -1px 0 var(--line);
+}
+
+/* ── The desktop window ──────────────────────────────────────────────────────
+   macOS draws its close/minimise/zoom buttons over the top-left of the content
+   when the title bar is hidden, which is how the app got a set of coloured dots
+   sitting on top of its own header. This reserves that strip and makes it a
+   drag handle, so the window behaves like a native one. */
+.in-desktop { padding-top: 30px; }
+.in-desktop::before {
+  content: '';
+  position: fixed;
+  top: 0; left: 0; right: 0;
+  height: 30px;
+  background: var(--bg);
+  border-bottom: 1px solid var(--line);
+  -webkit-app-region: drag;
+  z-index: 200;
+}
+.in-desktop button,
+.in-desktop input,
+.in-desktop select { -webkit-app-region: no-drag; }

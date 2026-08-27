@@ -204,6 +204,7 @@ node scripts/test-observer-escaping.mjs  # guards the observer's template-litera
 node scripts/test-notice-period.mjs      # notice-period arithmetic and dropdown bucketing
 node scripts/test-location-mix.mjs       # how a batch is composed by location
 node scripts/test-identity.mjs           # personal info stays separate from answers
+node scripts/repair-external-verdicts.mjs # undo "applies elsewhere" verdicts made during a limit
 node scripts/split-knowledge-base.mjs    # label existing answers, repair bad personal fields
 node scripts/test-salary-expectation.mjs # currency detection and salary conversion
 node scripts/clean-answer-bank.mjs       # audit the answer bank (dry run)

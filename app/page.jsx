@@ -59,6 +59,14 @@ export default function Dashboard() {
 
   const flash = (msg) => { setToast(msg); setTimeout(() => setToast(null), 4000); };
 
+  // Are we inside the desktop window rather than a browser tab? Decided after mount,
+  // because the server renders this markup too and reading location during render makes
+  // the two disagree — React then keeps the server's version and the class never lands.
+  const [inDesktop, setInDesktop] = useState(false);
+  useEffect(() => {
+    setInDesktop(window.location.search.includes('shell=desktop'));
+  }, []);
+
   // Collapse cross-connector duplicates and apply sort/threshold. The same role
   // scraped from three boards is one opportunity — showing it three times inflates
   // every count you look at and wastes triage time.
@@ -381,7 +389,7 @@ export default function Dashboard() {
   };
 
   return (
-    <div className="container">
+    <div className={`container${inDesktop ? ' in-desktop' : ''}`}>
       <div className="header">
         <div className="logo">🎯 JobFinder</div>
         <div className="row" style={{ gap: 12 }}>
@@ -626,7 +634,7 @@ export default function Dashboard() {
                     </div>
 
                     {freshOpen && (
-                      <div className="table-wrap" style={{ marginTop: 10, maxHeight: 420, overflowY: 'auto' }}>
+                      <div className="table-wrap scroll-pane" style={{ marginTop: 10 }}>
                         {fresh.jobs.length === 0 ? (
                           <div className="muted" style={{ padding: 12 }}>
                             Nothing in this window yet. Hit “Scan All Sources”, or widen the range above.
@@ -1844,6 +1852,14 @@ function TerminalPanel({ profileId }) {
   const [collapsed, setCollapsed] = useState(false);
   const bodyRef = useRef(null);
 
+  // Tell the page how much room the drawer is taking, so the last card is never
+  // stranded underneath it. A fixed element occupies no layout space, so without this
+  // the page just appears to end early and no amount of scrolling helps.
+  useEffect(() => {
+    document.body.classList.toggle('terminal-open', !collapsed);
+    return () => document.body.classList.remove('terminal-open');
+  }, [collapsed]);
+
   useEffect(() => {
     if (!profileId) return undefined;
     // Reset on profile switch so we don't show another profile's history.
@@ -2297,7 +2313,7 @@ function GmailPanel({ profileId, flash, onUpdated, onStatus }) {
               only ones needing a reply
             </label>
           </div>
-          <div style={{ maxHeight: 560, overflow: 'auto' }}>
+          <div className="scroll-pane">
             {emails.length === 0 && (
               <div className="muted" style={{ padding: 16 }}>
                 Nothing yet — hit “Check mail”.
@@ -2994,7 +3010,7 @@ function AutoApplyPanel({ profileId, flash }) {
             {result.skipped || 0} skipped · {result.errors || 0} error(s)
             {result.abandoned ? ` · ${result.abandoned} given up on` : ''}
           </div>
-          <div className="table-wrap" style={{ marginTop: 8, maxHeight: 320, overflowY: 'auto' }}>
+          <div className="table-wrap scroll-pane" style={{ marginTop: 8 }}>
             <table>
               <thead><tr><th>Job</th><th>Outcome</th></tr></thead>
               <tbody>
@@ -3184,7 +3200,7 @@ function AnswerBank({ profileId }) {
             </div>
           </div>
 
-          <div className="table-wrap" style={{ marginTop: 10, maxHeight: 340, overflowY: 'auto' }}>
+          <div className="table-wrap scroll-pane" style={{ marginTop: 10 }}>
             <table>
               <thead>
                 <tr><th style={{ width: 30 }}></th><th>Field</th><th>Captured value</th><th></th></tr>

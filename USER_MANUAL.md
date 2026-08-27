@@ -188,6 +188,24 @@ Interest exactly as it treats a submission: a dry run never clicks it, and an ar
 does. Getting in before a posting exists is the point, so they are worth having in the
 mix.
 
+### LinkedIn's daily limit
+
+LinkedIn caps how many Easy Apply submissions an account can send in a day. When you hit
+it, it stops opening the form and shows *"You reached today's Easy Apply limit"* — and it
+only says so **after** you click Easy Apply, never on the job page.
+
+The app recognises that now, reports it plainly, and **stops the LinkedIn board for the
+rest of the run** rather than working through the queue getting the same refusal. Nothing
+is recorded against the postings, so they are all still waiting tomorrow.
+
+This matters more than it sounds. Before, the refusal looked identical to "this job
+applies on the company site", and that verdict was written to the database permanently.
+A single day spent at the limit wrote off nearly 600 LinkedIn jobs, including ones the
+scan had positively identified from LinkedIn's own Easy Apply feed. If the board is quiet
+and the log says nothing, that was why.
+
+Naukri has no equivalent cap and keeps going.
+
 ### Running it on a schedule
 
 The Auto-apply tab can repeat a batch by itself — every 20 minutes, hourly, or as slow
