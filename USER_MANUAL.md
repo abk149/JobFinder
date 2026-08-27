@@ -331,6 +331,33 @@ scored against the posting's requirements and the best is attached:
 
 ## 3. The answer bank
 
+The tab holds two separate things, because they behave differently.
+
+### Personal information
+
+Your name, email, phone, LinkedIn, GitHub, website, and where you live. A short fixed
+list you confirm once. Each field is checked for **shape**: an email needs an @ and a
+domain, a phone needs digits, a LinkedIn link has to mention linkedin.com. Type something
+that does not fit and it is refused with a reason rather than saved.
+
+That check exists because of a real failure. Field labels are collapsed to a shared key
+so "E-mail address", "Email ID" and "Your email" all resolve to one answer — but the rule
+matched the label alone, so a question that merely *mentioned* email ("Do you consent to
+email updates?") collapsed to the same key and wrote its **Yes** over the address.
+Autofill then typed "Yes" into an employer's email box, and nothing noticed, because to
+the bank one approved string is as good as another. Four fields were corrupted this way.
+
+The shape check now runs twice: when an answer is saved, and again when a form is filled
+— because a bank that is already wrong should not be able to put "Yes" in an email box
+tomorrow either. If a stored personal detail fails its own check at fill time, the field
+is treated as unanswered and you are asked.
+
+### Answers to questions
+
+Everything else: the replies employers' forms have asked you for. This list grows, gets
+reviewed, and is matched semantically. It is the part that is *supposed* to be messy.
+
+
 Everything typed into an application is captured — but **nothing is used until you
 approve it**.
 

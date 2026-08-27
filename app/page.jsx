@@ -3028,9 +3028,15 @@ function AnswerBank({ profileId }) {
   const [picked, setPicked] = useState(() => new Set());
   const [busy, setBusy] = useState(false);
 
+  const [identity, setIdentity] = useState([]);
+  const [idDraft, setIdDraft] = useState({});
+  const [idError, setIdError] = useState({});
+
   const load = useCallback(async () => {
     const r = await fetch(`/api/answers?profile_id=${profileId}`).then((r) => r.json());
-    setRows(r.answers || []);
+    // Questions only. Personal details have their own section and their own rules.
+    setRows(r.questions || r.answers || []);
+    setIdentity(r.identity || []);
     const p = await fetch(`/api/answers/review?profile_id=${profileId}&status=pending`)
       .then((x) => x.json()).catch(() => ({ answers: [] }));
     setPending(p.answers || []);
@@ -3075,8 +3081,78 @@ function AnswerBank({ profileId }) {
 
   const allPicked = pending.length > 0 && picked.size === pending.length;
 
+  async function saveIdentity(f) {
+    const value = (idDraft[f.field_key] ?? f.value ?? '').trim();
+    const res = await fetch('/api/answers', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ profile_id: profileId, field_key: f.field_key, value, label: f.label }),
+    }).then((x) => x.json());
+    if (res.error) { setIdError((e) => ({ ...e, [f.field_key]: res.error })); return; }
+    setIdError((e) => ({ ...e, [f.field_key]: '' }));
+    setIdDraft((d) => { const n2 = { ...d }; delete n2[f.field_key]; return n2; });
+    load();
+  }
+
+  const groups = [...new Set(identity.map((f) => f.group))];
+  const idMissing = identity.filter((f) => !f.ok).length;
+
   return (
     <div>
+      {/* ── Personal information ─────────────────────────────────────────────
+          Separate from the answer bank because it behaves differently: a short
+          fixed list, confirmed once, where a wrong value is not a bad answer but
+          a wrong fact typed into an employer's form. */}
+      <div className="card">
+        <div className="row" style={{ justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 10 }}>
+          <div>
+            <div className="label">
+              👤 Personal information
+              {idMissing > 0 && <span style={{ color: '#d29922' }}> · {idMissing} to fill in</span>}
+            </div>
+            <div className="muted">
+              The facts that do not change. Set them once and they are used everywhere. These are
+              kept apart from the answer bank and checked for shape — an email has to look like an
+              email, so a stray &ldquo;Yes&rdquo; can never be typed into an employer&apos;s address box.
+            </div>
+          </div>
+        </div>
+
+        {groups.map((g) => (
+          <div key={g} style={{ marginTop: 12 }}>
+            <div className="muted" style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: '.06em', marginBottom: 6 }}>{g}</div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 10 }}>
+              {identity.filter((f) => f.group === g).map((f) => {
+                const dirty = idDraft[f.field_key] !== undefined && idDraft[f.field_key] !== f.value;
+                return (
+                  <div key={f.field_key}>
+                    <label className="label" style={{ fontSize: 12 }}>
+                      {f.label}
+                      {f.ok
+                        ? <span style={{ color: '#3fb950' }}> ✓</span>
+                        : <span style={{ color: '#d29922' }}> · {f.status === 'missing' ? 'not set' : 'needs your attention'}</span>}
+                    </label>
+                    <div className="row" style={{ gap: 6 }}>
+                      <input
+                        value={idDraft[f.field_key] ?? f.value ?? ''}
+                        placeholder={f.placeholder}
+                        onChange={(e) => setIdDraft((d) => ({ ...d, [f.field_key]: e.target.value }))}
+                        onKeyDown={(e) => { if (e.key === 'Enter') saveIdentity(f); }}
+                        style={{ flex: 1, borderColor: idError[f.field_key] ? '#f85149' : undefined }}
+                      />
+                      {dirty && <button className="primary" onClick={() => saveIdentity(f)}>Save</button>}
+                    </div>
+                    {idError[f.field_key] && (
+                      <div className="muted" style={{ color: '#f85149', fontSize: 12 }}>{idError[f.field_key]}</div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        ))}
+      </div>
+
       {pending.length > 0 && (
         <div className="card" style={{ borderColor: '#d29922', background: '#d2992211' }}>
           <div className="row" style={{ justifyContent: 'space-between', alignItems: 'flex-start' }}>
@@ -3143,7 +3219,10 @@ function AnswerBank({ profileId }) {
       <div className="card">
         <div className="row" style={{ justifyContent: 'space-between' }}>
           <div>
-            <div className="label">Harvested answers</div>
+            <div className="label">
+              💬 Answer bank
+              <span className="muted" style={{ fontWeight: 400 }}> · replies to questions employers asked</span>
+            </div>
             <div className="muted">
               {rows.filter((r) => (r.status || 'approved') === 'approved').length} approved
               {rows.some((r) => r.status === 'rejected') ? `, ${rows.filter((r) => r.status === 'rejected').length} rejected` : ''}

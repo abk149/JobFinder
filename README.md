@@ -164,6 +164,11 @@ call that commercial bot-detectors fingerprint, plus an init script covering
 `navigator.webdriver`, plugin identity, WebGL vendor and the `chrome.*` surface.
 `scripts/test-stealth.mjs` asserts 23 fingerprint probes.
 
+**Two kinds of knowledge.** Personal information — name, contact, links, where you live —
+is a short fixed list you confirm once, kept apart from the answer bank and checked for
+shape. Everything else is a reply to a question an employer asked. Mixing them is how a
+form question that merely *mentioned* email ended up storing "Yes" as the email address.
+
 **Retrieval.** Answers are matched by exact key first, then by cosine similarity over
 `all-minilm` embeddings, and only then handed to the LLM — which is told to return
 a literal `[BLANK]` rather than invent a phone number.
@@ -198,6 +203,8 @@ node scripts/test-autofill.mjs           # autofill end-to-end against a real fo
 node scripts/test-observer-escaping.mjs  # guards the observer's template-literal escapes
 node scripts/test-notice-period.mjs      # notice-period arithmetic and dropdown bucketing
 node scripts/test-location-mix.mjs       # how a batch is composed by location
+node scripts/test-identity.mjs           # personal info stays separate from answers
+node scripts/split-knowledge-base.mjs    # label existing answers, repair bad personal fields
 node scripts/test-salary-expectation.mjs # currency detection and salary conversion
 node scripts/clean-answer-bank.mjs       # audit the answer bank (dry run)
 node scripts/check-canon-parity.mjs      # field-key canonicaliser parity check
