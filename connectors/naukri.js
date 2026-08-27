@@ -93,45 +93,78 @@ export default {
     //
     // A keyword search is not where Naukri keeps the jobs you can actually apply to.
     // Measured on one profile: a "business consultant" search returned 24 postings, all
-    // of them "Apply on company site". The signed-in homepage — "Jobs based on your
-    // profile" and "Jobs based on your applies" — returned 66, of which 46 apply on
-    // Naukri itself.
+    // of them "Apply on company site". The signed-in recommendations are the opposite —
+    // mostly jobs that are applied to on Naukri itself.
     //
-    // Those feeds are drawn from one endpoint, and it hands over everything needed
-    // (title, company, URL, and companyApplyJob) as JSON, so there is no card markup to
-    // track. Additive and best-effort: it needs a signed-in session, and without one the
+    // AND THERE ARE FIVE OF THEM, NOT ONE.
+    // The recommendations page is a set of tabs, and reading only the one that happens
+    // to be open leaves most of the jobs on the table. Measured on the same profile:
+    //
+    //     Profile          52 jobs   35 apply on Naukri   (the tab that loads by default)
+    //     Applies          34        27
+    //     Top Candidate    56        46
+    //     Preferences      64        53
+    //     You might like   74        59
+    //
+    // So four fifths of the applyable jobs were never seen.
+    //
+    // Each tab POSTs to the same endpoint with a different clusterId. That request is
+    // NOT reconstructed here: its body carries a clusterSplitDate map of server-issued
+    // timestamps, and forging those means guessing at state Naukri owns. Clicking the
+    // tab and reading what the page fetches is both simpler and honest — the browser
+    // builds the correct request, we just listen.
+    //
+    // Additive and best-effort: it needs a signed-in session, and without one the
     // keyword results above stand exactly as before.
     try {
-      let recommended = null;
+      const payloads = [];
       const onRecom = async (r) => {
         if (!/\/jobapi\/v\d\/search\/recom-jobs/.test(r.url())) return;
-        try { recommended = await r.json(); } catch { /* not the payload */ }
+        try { payloads.push(await r.json()); } catch { /* not the payload */ }
       };
       page.on('response', onRecom);
-      await page.goto('https://www.naukri.com/mnjuser/homepage', { waitUntil: 'domcontentloaded', timeout: 40000 });
+      await page.goto('https://www.naukri.com/mnjuser/recommendedjobs', { waitUntil: 'domcontentloaded', timeout: 40000 });
       await humanDelay(4000, 6000);
+
+      // Walk the remaining tabs. Index 0 is already loaded — clicking it fetches nothing.
+      const tabCount = await page.evaluate(() => document.querySelectorAll('.tab-list-item').length).catch(() => 0);
+      for (let i = 1; i < Math.min(tabCount, 8); i++) {
+        const clicked = await page.evaluate((idx) => {
+          const tabs = document.querySelectorAll('.tab-list-item');
+          if (!tabs[idx]) return false;
+          tabs[idx].click();
+          return true;
+        }, i).catch(() => false);
+        if (!clicked) break;
+        await humanDelay(3000, 4500);   // the tab fetches after the click
+      }
       page.off('response', onRecom);
 
-      for (const j of (recommended?.jobDetails || [])) {
-        if (!j || !j.jdURL || !j.title) continue;
-        const url = j.jdURL.startsWith('http') ? j.jdURL : `https://www.naukri.com${j.jdURL}`;
-        const ext = url.split('?')[0];
-        if (out.some((x) => x.external_id === ext)) continue;
-        const place = (type) => (j.placeholders || []).find((x) => x.type === type)?.label || '';
-        out.push({
-          id: jobId('naukri', ext),
-          external_id: ext,
-          title: j.title,
-          company: j.companyName || '',
-          location: place('location'),
-          url,
-          salary: place('salary'),
-          posted_at: j.createdDate ? new Date(j.createdDate).toISOString() : '',
-          description: j.jobDescription || '',
-          // Straight from Naukri: false means the application is completed on Naukri.
-          apply_kind: j.companyApplyJob ? 'external' : 'internal',
-        });
+      let added = 0;
+      for (const payload of payloads) {
+        for (const j of (payload?.jobDetails || [])) {
+          if (!j || !j.jdURL || !j.title) continue;
+          const url = j.jdURL.startsWith('http') ? j.jdURL : `https://www.naukri.com${j.jdURL}`;
+          const ext = url.split('?')[0];
+          if (out.some((x) => x.external_id === ext)) continue;   // tabs overlap heavily
+          const place = (type) => (j.placeholders || []).find((x) => x.type === type)?.label || '';
+          out.push({
+            id: jobId('naukri', ext),
+            external_id: ext,
+            title: j.title,
+            company: j.companyName || '',
+            location: place('location'),
+            url,
+            salary: place('salary'),
+            posted_at: j.createdDate ? new Date(j.createdDate).toISOString() : '',
+            description: j.jobDescription || '',
+            // Straight from Naukri: false means the application is completed on Naukri.
+            apply_kind: j.companyApplyJob ? 'external' : 'internal',
+          });
+          added++;
+        }
       }
+      if (added) console.log(`[naukri] ${added} job(s) from ${payloads.length} recommendation tab(s)`);
     } catch { /* signed out or endpoint moved — keyword results stand */ }
 
     // ── Early access roles ───────────────────────────────────────────────────

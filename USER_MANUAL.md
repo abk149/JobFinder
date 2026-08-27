@@ -221,7 +221,10 @@ twenty entries that look actionable and are not. Untick **hide applied** to see 
 use the Tracker, which always shows the full pipeline.
 
 **Sign in to both boards — it is the difference between a handful of applyable jobs and
-a hundred.** A keyword search is not where either site keeps the work you can apply to
+a few hundred.** Naukri's recommendations are five separate tabs — *Profile*, *Applies*,
+*Top Candidate*, *Preferences*, *You might like* — and all five are read, because reading
+only the one that happens to be open leaves four fifths of the applyable jobs behind. On
+one profile that was 200 jobs that apply on Naukri, against 46 before. A keyword search is not where either site keeps the work you can apply to
 without leaving it. Naukri's signed-in homepage feeds ("jobs based on your profile" and
 "based on your applies") are mostly jobs that apply on Naukri, while a keyword search of
 the same profile returned 24 postings that were *all* "Apply on company site". LinkedIn

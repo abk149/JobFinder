@@ -1,0 +1,1605 @@
+<title>JobFinder Internals</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;0,6..72,600;1,6..72,400&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+
+<style>
+/* ─────────────────────────────────────────────────────────────
+   JobFinder Internals — design tokens
+   Palette: cool paper, pine accent. Ink carries a green bias so
+   the neutrals sit inside the accent's family rather than beside it.
+   ───────────────────────────────────────────────────────────── */
+:root {
+  --ground:      #F4F6F4;
+  --surface:     #FFFFFF;
+  --surface-2:   #EAEEEA;
+  --ink:         #16211C;
+  --ink-soft:    #4C5B54;
+  --ink-faint:   #7B8A83;
+  --line:        #CBD5CE;
+  --line-soft:   #DFE5E0;
+  --accent:      #2F6B4F;
+  --accent-soft: #E0EBE3;
+  --accent-ink:  #1F4D38;
+  --warn:        #9A6410;
+  --warn-soft:   #F6EBD8;
+  --stop:        #93362F;
+  --stop-soft:   #F6E3E1;
+  --shadow:      0 1px 2px rgba(22,33,28,.06), 0 8px 24px rgba(22,33,28,.05);
+
+  --font-display: "Newsreader", Georgia, "Times New Roman", serif;
+  --font-body:    "IBM Plex Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --font-mono:    "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+
+  --measure: 68ch;
+  --rail: 264px;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --ground:      #0E1512;
+    --surface:     #151E1A;
+    --surface-2:   #1D2823;
+    --ink:         #E3EAE5;
+    --ink-soft:    #A7B5AD;
+    --ink-faint:   #78877F;
+    --line:        #2C3A33;
+    --line-soft:   #24312B;
+    --accent:      #6FBF92;
+    --accent-soft: #1B2E24;
+    --accent-ink:  #9BD6B4;
+    --warn:        #DCA855;
+    --warn-soft:   #2C2515;
+    --stop:        #E08078;
+    --stop-soft:   #2E1B19;
+    --shadow:      0 1px 2px rgba(0,0,0,.4), 0 8px 28px rgba(0,0,0,.35);
+  }
+}
+:root[data-theme="dark"] {
+  --ground:      #0E1512;
+  --surface:     #151E1A;
+  --surface-2:   #1D2823;
+  --ink:         #E3EAE5;
+  --ink-soft:    #A7B5AD;
+  --ink-faint:   #78877F;
+  --line:        #2C3A33;
+  --line-soft:   #24312B;
+  --accent:      #6FBF92;
+  --accent-soft: #1B2E24;
+  --accent-ink:  #9BD6B4;
+  --warn:        #DCA855;
+  --warn-soft:   #2C2515;
+  --stop:        #E08078;
+  --stop-soft:   #2E1B19;
+  --shadow:      0 1px 2px rgba(0,0,0,.4), 0 8px 28px rgba(0,0,0,.35);
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--ground);
+  color: var(--ink);
+  font-family: var(--font-body);
+  font-size: 16.5px;
+  line-height: 1.62;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ── Shell ───────────────────────────────────────────────── */
+.shell {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 0;
+  max-width: 1220px;
+  margin: 0 auto;
+  padding: 0 24px 120px;
+}
+@media (min-width: 1080px) {
+  .shell { grid-template-columns: var(--rail) minmax(0, 1fr); gap: 56px; padding-left: 40px; padding-right: 40px; }
+}
+
+/* ── Masthead ────────────────────────────────────────────── */
+.masthead {
+  grid-column: 1 / -1;
+  border-bottom: 1px solid var(--line);
+  padding: 72px 0 40px;
+  margin-bottom: 48px;
+}
+.eyebrow {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  letter-spacing: .14em;
+  text-transform: uppercase;
+  color: var(--accent);
+  margin: 0 0 18px;
+}
+.masthead h1 {
+  font-family: var(--font-display);
+  font-weight: 500;
+  font-size: clamp(2.6rem, 6vw, 4.1rem);
+  line-height: 1.02;
+  letter-spacing: -.02em;
+  margin: 0 0 20px;
+  text-wrap: balance;
+}
+.standfirst {
+  font-family: var(--font-display);
+  font-size: clamp(1.06rem, 2vw, 1.28rem);
+  line-height: 1.55;
+  color: var(--ink-soft);
+  max-width: 62ch;
+  margin: 0 0 28px;
+}
+.meta-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 20px 32px;
+  max-width: 860px;
+}
+.meta-grid div { display: flex; flex-direction: column; gap: 3px; }
+.meta-grid dt, .meta-k {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+}
+.meta-v { font-size: 14.5px; color: var(--ink); font-weight: 500; }
+
+/* ── Table of contents rail ──────────────────────────────── */
+.rail { display: none; }
+@media (min-width: 1080px) {
+  .rail {
+    display: block;
+    position: sticky;
+    top: 24px;
+    align-self: start;
+    max-height: calc(100vh - 48px);
+    overflow-y: auto;
+    padding-right: 8px;
+    border-right: 1px solid var(--line-soft);
+  }
+}
+.rail h2 {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+  margin: 0 0 14px;
+  font-weight: 500;
+}
+.rail ol { list-style: none; margin: 0; padding: 0; counter-reset: rail; display: flex; flex-direction: column; gap: 2px; }
+.rail li { counter-increment: rail; }
+.rail a {
+  display: grid;
+  grid-template-columns: 26px 1fr;
+  gap: 6px;
+  text-decoration: none;
+  color: var(--ink-soft);
+  font-size: 13.5px;
+  line-height: 1.35;
+  padding: 5px 6px 5px 0;
+  border-radius: 4px;
+}
+.rail a::before {
+  content: counter(rail, decimal-leading-zero);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--ink-faint);
+  padding-top: 2px;
+}
+.rail a:hover { color: var(--accent); }
+.rail a:hover::before { color: var(--accent); }
+
+/* ── Mobile contents ─────────────────────────────────────── */
+.toc-inline { margin: 0 0 56px; }
+@media (min-width: 1080px) { .toc-inline { display: none; } }
+.toc-inline ol {
+  columns: 2; column-gap: 28px;
+  list-style: none; margin: 0; padding: 0; counter-reset: t;
+  font-size: 14px;
+}
+.toc-inline li { counter-increment: t; break-inside: avoid; margin-bottom: 6px; }
+.toc-inline a { color: var(--ink-soft); text-decoration: none; }
+.toc-inline a::before { content: counter(t, decimal-leading-zero) " "; font-family: var(--font-mono); font-size: 11px; color: var(--ink-faint); }
+
+/* ── Article ─────────────────────────────────────────────── */
+article { min-width: 0; }
+section { margin-bottom: 76px; scroll-margin-top: 24px; }
+section > * { max-width: var(--measure); }
+section > figure, section > .wide, section > .table-wrap { max-width: 100%; }
+
+h2 {
+  font-family: var(--font-display);
+  font-weight: 500;
+  font-size: clamp(1.75rem, 3.4vw, 2.35rem);
+  line-height: 1.14;
+  letter-spacing: -.015em;
+  margin: 0 0 8px;
+  text-wrap: balance;
+}
+.sec-num {
+  display: block;
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  letter-spacing: .14em;
+  color: var(--accent);
+  margin-bottom: 10px;
+  text-transform: uppercase;
+}
+h3 {
+  font-family: var(--font-body);
+  font-weight: 600;
+  font-size: 1.06rem;
+  letter-spacing: -.005em;
+  margin: 42px 0 10px;
+  color: var(--ink);
+}
+h4 {
+  font-family: var(--font-mono);
+  font-weight: 500;
+  font-size: 12px;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+  margin: 30px 0 8px;
+}
+p { margin: 0 0 18px; }
+a { color: var(--accent-ink); text-decoration-color: var(--line); text-underline-offset: 2px; }
+a:focus-visible, .rail a:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; border-radius: 3px; }
+strong { font-weight: 600; }
+em { font-style: italic; }
+code {
+  font-family: var(--font-mono);
+  font-size: .86em;
+  background: var(--surface-2);
+  padding: .12em .38em;
+  border-radius: 3px;
+  color: var(--ink);
+}
+ul, ol { margin: 0 0 18px; padding-left: 1.3em; }
+li { margin-bottom: 7px; }
+li::marker { color: var(--ink-faint); }
+
+.lede {
+  font-size: 1.06rem;
+  color: var(--ink-soft);
+  border-left: 2px solid var(--accent);
+  padding-left: 18px;
+  margin: 0 0 30px;
+}
+
+/* ── Callouts ────────────────────────────────────────────── */
+.note {
+  background: var(--surface);
+  border: 1px solid var(--line-soft);
+  border-left: 3px solid var(--accent);
+  border-radius: 3px;
+  padding: 18px 20px;
+  margin: 26px 0;
+  font-size: 15.3px;
+}
+.note.measured { border-left-color: var(--warn); }
+.note.danger   { border-left-color: var(--stop); }
+.note > :last-child { margin-bottom: 0; }
+.note-k {
+  display: block;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  color: var(--accent);
+  margin-bottom: 7px;
+}
+.note.measured .note-k { color: var(--warn); }
+.note.danger   .note-k { color: var(--stop); }
+
+/* ── Figures ─────────────────────────────────────────────── */
+figure {
+  margin: 34px 0;
+  padding: 0;
+}
+figure svg {
+  display: block;
+  width: 100%;
+  max-width: 100%;
+  height: auto;
+  color: var(--ink-soft);
+  background: var(--surface);
+  border: 1px solid var(--line-soft);
+  border-radius: 4px;
+}
+figcaption {
+  font-size: 13.5px;
+  line-height: 1.5;
+  color: var(--ink-faint);
+  margin-top: 11px;
+  max-width: 66ch;
+}
+figcaption b { color: var(--ink-soft); font-weight: 600; }
+
+/* ── Tables ──────────────────────────────────────────────── */
+.table-wrap { overflow-x: auto; margin: 26px 0; border: 1px solid var(--line-soft); border-radius: 4px; background: var(--surface); }
+table { border-collapse: collapse; width: 100%; font-size: 14.4px; }
+caption { caption-side: bottom; text-align: left; font-size: 13px; color: var(--ink-faint); padding: 10px 16px; }
+th, td { padding: 10px 16px; text-align: left; border-bottom: 1px solid var(--line-soft); vertical-align: top; }
+thead th {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+  font-weight: 500;
+  background: var(--surface-2);
+  white-space: nowrap;
+}
+tbody tr:last-child td { border-bottom: none; }
+td.num, th.num { text-align: right; font-family: var(--font-mono); font-variant-numeric: tabular-nums; white-space: nowrap; }
+td code { background: transparent; padding: 0; }
+
+/* ── Code blocks ─────────────────────────────────────────── */
+pre {
+  background: var(--surface-2);
+  border: 1px solid var(--line-soft);
+  border-radius: 4px;
+  padding: 16px 18px;
+  overflow-x: auto;
+  font-family: var(--font-mono);
+  font-size: 13.2px;
+  line-height: 1.6;
+  margin: 22px 0;
+  color: var(--ink);
+}
+pre code { background: none; padding: 0; font-size: inherit; }
+
+/* ── Definition lists ────────────────────────────────────── */
+dl.defs { margin: 22px 0; display: grid; gap: 14px; }
+dl.defs dt {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  color: var(--accent-ink);
+  margin-bottom: 3px;
+}
+dl.defs dd { margin: 0; color: var(--ink-soft); font-size: 15.2px; }
+
+hr { border: none; border-top: 1px solid var(--line-soft); margin: 44px 0; }
+
+.footer {
+  grid-column: 1 / -1;
+  border-top: 1px solid var(--line);
+  padding-top: 24px;
+  font-size: 13.5px;
+  color: var(--ink-faint);
+  max-width: none;
+}
+@media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
+</style>
+
+<div class="shell">
+
+  <header class="masthead">
+    <p class="eyebrow">Engineering documentation</p>
+    <h1>JobFinder Internals</h1>
+    <p class="standfirst">A local-first job-application assistant: nineteen-plus scrapers, a deterministic fit model, an embedding-backed answer bank, and an auto-apply engine whose central rule is that it will stop rather than state something about you that you never said.</p>
+    <div class="meta-grid">
+      <div><span class="meta-k">Runtime</span><span class="meta-v">Node 20+ · Next.js 14 App Router</span></div>
+      <div><span class="meta-k">Storage</span><span class="meta-v">SQLite (WAL) or TimescaleDB</span></div>
+      <div><span class="meta-k">Automation</span><span class="meta-v">rebrowser-playwright over CDP</span></div>
+      <div><span class="meta-k">Models</span><span class="meta-v">Ollama · qwen2.5:7b-instruct · all-minilm</span></div>
+      <div><span class="meta-k">Network boundary</span><span class="meta-v">Job boards + cited sources only</span></div>
+      <div><span class="meta-k">Source size</span><span class="meta-v">≈ 20,800 lines across lib/, connectors/, app/</span></div>
+    </div>
+  </header>
+
+  <nav class="rail" aria-label="Contents">
+    <h2>Contents</h2>
+    <ol>
+      <li><a href="#s1">The constraint that shapes everything</a></li>
+      <li><a href="#s2">System map</a></li>
+      <li><a href="#s3">Storage: one facade, two engines</a></li>
+      <li><a href="#s4">Acquisition: the connector layer</a></li>
+      <li><a href="#s5">Fit scoring, deterministically</a></li>
+      <li><a href="#s6">Retrieval: the embedding decision</a></li>
+      <li><a href="#s7">The language-model layer</a></li>
+      <li><a href="#s8">Autofill and the observer</a></li>
+      <li><a href="#s9">Auto-apply: the refusal engine</a></li>
+      <li><a href="#s10">Answers that are computed, not stored</a></li>
+      <li><a href="#s11">Anti-detection and lazy attach</a></li>
+      <li><a href="#s12">Interview prep: evidence to notes</a></li>
+      <li><a href="#s13">The scheduler's four brakes</a></li>
+      <li><a href="#s14">Pipeline, mail and contacts</a></li>
+      <li><a href="#s15">Packaging</a></li>
+      <li><a href="#s16">Where the ML actually is</a></li>
+    </ol>
+  </nav>
+
+  <article>
+
+    <nav class="toc-inline" aria-label="Contents">
+      <h4>Contents</h4>
+      <ol>
+        <li><a href="#s1">The constraint</a></li>
+        <li><a href="#s2">System map</a></li>
+        <li><a href="#s3">Storage</a></li>
+        <li><a href="#s4">Acquisition</a></li>
+        <li><a href="#s5">Fit scoring</a></li>
+        <li><a href="#s6">Retrieval</a></li>
+        <li><a href="#s7">LLM layer</a></li>
+        <li><a href="#s8">Autofill</a></li>
+        <li><a href="#s9">Auto-apply</a></li>
+        <li><a href="#s10">Derived answers</a></li>
+        <li><a href="#s11">Anti-detection</a></li>
+        <li><a href="#s12">Interview prep</a></li>
+        <li><a href="#s13">Scheduler</a></li>
+        <li><a href="#s14">Pipeline &amp; mail</a></li>
+        <li><a href="#s15">Packaging</a></li>
+        <li><a href="#s16">Where the ML is</a></li>
+      </ol>
+    </nav>
+
+    <!-- ═══════════════════════════════════════════════════ 1 -->
+    <section id="s1">
+      <span class="sec-num">Section 01</span>
+      <h2>The constraint that shapes everything</h2>
+
+      <p class="lede">Every architectural decision in this codebase descends from one commitment: the machine holds the CV, the answers, the cookies and the database, and nothing else does. There is no server, no account, and no telemetry.</p>
+
+      <p>That is not a privacy footnote bolted onto a normal web app — it changes what is buildable. A cloud job-application tool would score postings with a frontier model, keep a shared embedding index, and log every field it filled. None of those are available here. Instead:</p>
+
+      <ul>
+        <li><strong>Scoring must be deterministic and CPU-bound.</strong> Running an 8B local model over 347 scraped postings would take hours and give different answers each pass, so ranking is a weighted rule model that finishes in well under a second (<a href="#s5">§5</a>).</li>
+        <li><strong>Retrieval must work on a 46&nbsp;MB embedding model.</strong> The answer bank is matched by cosine similarity over <code>all-minilm</code> vectors, and the choice of model was settled by measurement rather than reputation (<a href="#s6">§6</a>).</li>
+        <li><strong>The LLM is the last resort, not the first.</strong> It drafts prose. It is never allowed to supply a fact about the candidate (<a href="#s9">§9</a>).</li>
+        <li><strong>The browser is the user's real Chrome.</strong> A fresh bundled Chromium with no history is a worse bot-detection outcome than an installed browser with a lived-in profile, so the code hunts for a real one first (<a href="#s11">§11</a>).</li>
+      </ul>
+
+      <p>The second shaping fact is that this software presses buttons an employer sees. Auto-apply is the only subsystem that produces an irreversible external effect, and it is written defensively to a degree that the rest of the codebase is not: dry run by default, arming never remembered between runs, a daily cap derived from the database rather than an in-memory counter, and a hard rule against inventing an answer.</p>
+    </section>
+
+    <!-- ═══════════════════════════════════════════════════ 2 -->
+    <section id="s2">
+      <span class="sec-num">Section 02</span>
+      <h2>System map</h2>
+
+      <p>Five stages, one database. Everything crosses the same <code>jobs</code> table, which is why a posting pasted from a link is indistinguishable downstream from one that came out of a scraper.</p>
+
+      <figure>
+        <svg viewBox="0 0 900 430" role="img" aria-label="JobFinder pipeline: connectors feed a scan runner which writes to SQLite; the fit scorer, autofill, auto-apply, tracker and interview prep all read and write that same database, with Ollama serving embeddings and drafts.">
+          <defs>
+            <marker id="jf-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="currentColor"/>
+            </marker>
+            <marker id="jf-arrow-a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#2F6B4F"/>
+            </marker>
+          </defs>
+
+          <!-- row 1: sources -->
+          <text x="30" y="34" font-family="IBM Plex Mono, monospace" font-size="11" fill="currentColor" letter-spacing="1.2">SOURCES</text>
+          <rect x="30" y="46" width="150" height="46" rx="3" fill="none" stroke="currentColor" stroke-width="1"/>
+          <text x="105" y="66" font-size="13" text-anchor="middle" fill="currentColor">14 API feeds</text>
+          <text x="105" y="82" font-size="11" text-anchor="middle" fill="currentColor" opacity=".7">HTTP · parallel</text>
+
+          <rect x="30" y="104" width="150" height="46" rx="3" fill="none" stroke="currentColor" stroke-width="1"/>
+          <text x="105" y="124" font-size="13" text-anchor="middle" fill="currentColor">7 browser feeds</text>
+          <text x="105" y="140" font-size="11" text-anchor="middle" fill="currentColor" opacity=".7">headless · max 3</text>
+
+          <rect x="30" y="162" width="150" height="40" rx="3" fill="none" stroke="currentColor" stroke-width="1" stroke-dasharray="4 3"/>
+          <text x="105" y="187" font-size="13" text-anchor="middle" fill="currentColor">pasted link</text>
+
+          <!-- scan runner -->
+          <line x1="180" y1="69" x2="238" y2="112" stroke="currentColor" stroke-width="1.2" marker-end="url(#jf-arrow)"/>
+          <line x1="180" y1="127" x2="238" y2="122" stroke="currentColor" stroke-width="1.2" marker-end="url(#jf-arrow)"/>
+          <line x1="180" y1="182" x2="238" y2="136" stroke="currentColor" stroke-width="1.2" marker-end="url(#jf-arrow)"/>
+
+          <rect x="240" y="98" width="128" height="54" rx="3" fill="none" stroke="currentColor" stroke-width="1.4"/>
+          <text x="304" y="120" font-size="13" text-anchor="middle" fill="currentColor">scanRunner</text>
+          <text x="304" y="137" font-size="11" text-anchor="middle" fill="currentColor" opacity=".7">dedupe · budget</text>
+
+          <!-- database -->
+          <line x1="368" y1="125" x2="426" y2="125" stroke="currentColor" stroke-width="1.2" marker-end="url(#jf-arrow)"/>
+          <text x="397" y="117" font-size="10" text-anchor="middle" fill="currentColor" opacity=".75">upsert</text>
+
+          <rect x="428" y="86" width="150" height="258" rx="3" fill="#2F6B4F" fill-opacity=".07" stroke="#2F6B4F" stroke-width="1.4"/>
+          <text x="503" y="110" font-size="13" text-anchor="middle" fill="currentColor" font-weight="600">local database</text>
+          <text x="503" y="127" font-size="11" text-anchor="middle" fill="currentColor" opacity=".7">SQLite (WAL)</text>
+          <line x1="446" y1="140" x2="560" y2="140" stroke="#2F6B4F" stroke-width="1" opacity=".4"/>
+          <text x="446" y="160" font-family="IBM Plex Mono, monospace" font-size="11" fill="currentColor">jobs</text>
+          <text x="446" y="180" font-family="IBM Plex Mono, monospace" font-size="11" fill="currentColor">answers + vec</text>
+          <text x="446" y="200" font-family="IBM Plex Mono, monospace" font-size="11" fill="currentColor">cv_variants</text>
+          <text x="446" y="220" font-family="IBM Plex Mono, monospace" font-size="11" fill="currentColor">contacts</text>
+          <text x="446" y="240" font-family="IBM Plex Mono, monospace" font-size="11" fill="currentColor">emails</text>
+          <text x="446" y="260" font-family="IBM Plex Mono, monospace" font-size="11" fill="currentColor">prep_notes</text>
+          <text x="446" y="280" font-family="IBM Plex Mono, monospace" font-size="11" fill="currentColor">prep_chunks</text>
+          <text x="446" y="300" font-family="IBM Plex Mono, monospace" font-size="11" fill="currentColor">scan_runs</text>
+          <text x="446" y="326" font-size="11" fill="currentColor" opacity=".6">data/ — gitignored in full</text>
+
+          <!-- consumers -->
+          <g>
+            <rect x="640" y="46" width="228" height="42" rx="3" fill="none" stroke="currentColor" stroke-width="1"/>
+            <text x="754" y="72" font-size="13" text-anchor="middle" fill="currentColor">fit scoring &amp; dedupe (no LLM)</text>
+
+            <rect x="640" y="100" width="228" height="42" rx="3" fill="none" stroke="currentColor" stroke-width="1"/>
+            <text x="754" y="126" font-size="13" text-anchor="middle" fill="currentColor">autofill + answer bank</text>
+
+            <rect x="640" y="154" width="228" height="42" rx="3" fill="none" stroke="#2F6B4F" stroke-width="1.6"/>
+            <text x="754" y="180" font-size="13" text-anchor="middle" fill="currentColor" font-weight="600">auto-apply (LinkedIn · Naukri)</text>
+
+            <rect x="640" y="208" width="228" height="42" rx="3" fill="none" stroke="currentColor" stroke-width="1"/>
+            <text x="754" y="234" font-size="13" text-anchor="middle" fill="currentColor">pipeline tracker + mailbox</text>
+
+            <rect x="640" y="262" width="228" height="42" rx="3" fill="none" stroke="currentColor" stroke-width="1"/>
+            <text x="754" y="288" font-size="13" text-anchor="middle" fill="currentColor">interview prep &amp; Q&amp;A</text>
+          </g>
+
+          <line x1="578" y1="120" x2="636" y2="70" stroke="currentColor" stroke-width="1.2" marker-end="url(#jf-arrow)"/>
+          <line x1="578" y1="130" x2="636" y2="122" stroke="currentColor" stroke-width="1.2" marker-end="url(#jf-arrow)"/>
+          <line x1="578" y1="176" x2="636" y2="176" stroke="#2F6B4F" stroke-width="1.6" marker-end="url(#jf-arrow-a)"/>
+          <line x1="578" y1="222" x2="636" y2="230" stroke="currentColor" stroke-width="1.2" marker-end="url(#jf-arrow)"/>
+          <line x1="578" y1="268" x2="636" y2="284" stroke="currentColor" stroke-width="1.2" marker-end="url(#jf-arrow)"/>
+
+          <!-- ollama -->
+          <rect x="240" y="266" width="128" height="60" rx="3" fill="none" stroke="currentColor" stroke-width="1" stroke-dasharray="5 3"/>
+          <text x="304" y="290" font-size="13" text-anchor="middle" fill="currentColor">Ollama</text>
+          <text x="304" y="306" font-size="10.5" text-anchor="middle" fill="currentColor" opacity=".7">127.0.0.1:11434</text>
+          <text x="304" y="319" font-size="10.5" text-anchor="middle" fill="currentColor" opacity=".7">chat + embeddings</text>
+          <line x1="368" y1="296" x2="426" y2="270" stroke="currentColor" stroke-width="1.1" stroke-dasharray="4 3" marker-end="url(#jf-arrow)"/>
+          <text x="360" y="352" font-size="10.5" fill="currentColor" opacity=".7">optional — everything except</text>
+          <text x="360" y="366" font-size="10.5" fill="currentColor" opacity=".7">drafting works without it</text>
+
+          <!-- browser -->
+          <rect x="30" y="266" width="150" height="60" rx="3" fill="none" stroke="currentColor" stroke-width="1"/>
+          <text x="105" y="290" font-size="13" text-anchor="middle" fill="currentColor">your Chrome</text>
+          <text x="105" y="307" font-size="10.5" text-anchor="middle" fill="currentColor" opacity=".7">debug port open,</text>
+          <text x="105" y="320" font-size="10.5" text-anchor="middle" fill="currentColor" opacity=".7">no client attached</text>
+          <path d="M 180 296 C 205 296 215 176 236 176" fill="none" stroke="currentColor" stroke-width="1.1" opacity=".6"/>
+          <path d="M 105 266 L 105 210" fill="none" stroke="currentColor" stroke-width="1.1" marker-end="url(#jf-arrow)" opacity=".6"/>
+
+          <text x="30" y="404" font-size="11.5" fill="currentColor" opacity=".75">Nothing in this diagram crosses the machine boundary except the job boards themselves and the sources interview prep cites.</text>
+        </svg>
+        <figcaption><b>The pipeline.</b> The database is the only integration point; each subsystem reads and writes it and knows nothing about the others. That is why a pasted link becomes a first-class job with no special-casing downstream, and why the scheduler can drive a scan and an apply run through exactly the same code the UI buttons use.</figcaption>
+      </figure>
+    </section>
+
+    <!-- ═══════════════════════════════════════════════════ 3 -->
+    <section id="s3">
+      <span class="sec-num">Section 03</span>
+      <h2>Storage: one facade, two engines</h2>
+
+      <p><code>lib/db.js</code> exposes three functions — <code>all()</code>, <code>get()</code>, <code>run()</code> — and hides whether the rows come from a local SQLite file or a Postgres/TimescaleDB instance named by <code>TIMESCALE_URL</code>. Route handlers never branch on backend.</p>
+
+      <p>The facade is thin, but three details in it are load-bearing:</p>
+
+      <dl class="defs">
+        <dt>Placeholder translation</dt>
+        <dd>SQL is written with SQLite's <code>?</code> and rewritten to <code>$1, $2…</code> for Postgres by a positional regex replace. One dialect in the source, two at runtime.</dd>
+
+        <dt>Type-parser pinning</dt>
+        <dd><code>node-postgres</code> returns <code>BIGINT</code> and <code>NUMERIC</code> as strings to avoid precision loss. Every bigint here is an epoch-millisecond timestamp or a count, all comfortably inside <code>Number.MAX_SAFE_INTEGER</code>, so both OIDs are re-registered to parse as numbers. Without that, timestamps arrive as <code>"1717000000000"</code> and every date comparison silently misbehaves on one backend only — the classic "works on SQLite, breaks on Timescale" bug.</dd>
+
+        <dt><code>run()</code> returns <code>{ changes }</code></dt>
+        <dd>Callers need to distinguish an insert from a row skipped by <code>ON CONFLICT DO NOTHING</code>. Without it, a source returning fifty already-known jobs and a source returning nothing reported identically.</dd>
+      </dl>
+
+      <h3>Migration strategy: additive ALTERs in a try block</h3>
+
+      <p>There is no migration table and no version number. Schema evolution is a list of <code>ALTER TABLE … ADD COLUMN</code> statements each wrapped in <code>try { } catch { }</code>, run on every boot. If the column exists the statement throws and is swallowed; if it does not, it is added. Postgres gets the same list written as <code>ADD COLUMN IF NOT EXISTS</code>.</p>
+
+      <p>For a single-user local app this is the right trade: it is idempotent, it cannot half-apply, and a user upgrading from any past version converges to the current schema in one boot. It does not support renames or type changes — but no shipped version has needed one.</p>
+
+      <p>Two repairs also run at boot and are worth noting because they show the class of bug that survives in a local-first app: a loop that peels double- and triple-<code>JSON.stringify</code>-ed <code>profiles.filters</code> values left by an earlier PUT handler, and a one-line <code>UPDATE</code> that restores answers stranded at <code>status = 'needs_input'</code> while holding a real value. In a hosted app you would fix the data with a one-off script. Here the fix has to ship inside the product, because you cannot reach the database.</p>
+
+      <h3>Schema shape</h3>
+
+      <div class="table-wrap">
+        <table>
+          <caption>The tables that carry state. Everything else is derived at read time.</caption>
+          <thead><tr><th>Table</th><th>Carries</th><th>Notable columns</th></tr></thead>
+          <tbody>
+            <tr><td><code>jobs</code></td><td>Every posting ever seen, plus its pipeline state</td><td><code>canonical_key</code> (cross-board dedupe), <code>fit_score</code>/<code>fit_json</code>, <code>apply_kind</code>, <code>auto_apply_state</code>, <code>auto_apply_attempts</code>, <code>auto_apply_blocked_on</code></td></tr>
+            <tr><td><code>answers</code></td><td>The answer bank — one row per canonical question</td><td><code>embedding</code> (JSON float array), <code>status</code> ∈ {pending, approved, rejected, needs_input}, <code>options</code>, <code>asked_by</code></td></tr>
+            <tr><td><code>cv_variants</code></td><td>Several CVs plus their extracted text</td><td><code>cv_text</code> — scored against each posting at apply time</td></tr>
+            <tr><td><code>prep_sources</code> / <code>prep_notes</code> / <code>prep_chunks</code></td><td>Raw research material → synthesised notes → embedded slices</td><td><code>evidence</code> (verbatim JD sentence), <code>demand</code>, <code>sources_json</code></td></tr>
+            <tr><td><code>prep_terms</code></td><td>Cached "is this a real technology?" verdicts</td><td>Global, not per-profile — the answer does not vary by user</td></tr>
+            <tr><td><code>contacts</code></td><td>Hiring addresses the ads printed themselves</td><td><code>context</code> — the sentence it appeared in</td></tr>
+            <tr><td><code>emails</code></td><td>Job-related mail, matched and classified</td><td><code>asks</code> (JSON array of what HR wants), <code>suggested_status</code></td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <p>The separation of <code>answers.embedding</code> from <code>prep_chunks.embedding</code> is deliberate and repeated in the code comments: one holds facts about the candidate used to fill forms, the other holds study prose. Merging them would let essay text leak into a form field and let "notice period: 30 days" surface as an answer to a systems-design question.</p>
+    </section>
+
+    <!-- ═══════════════════════════════════════════════════ 4 -->
+    <section id="s4">
+      <span class="sec-num">Section 04</span>
+      <h2>Acquisition: the connector layer</h2>
+
+      <p>A connector is a module exporting <code>{ id, label, loginUrl, requiresAuth, requiresBrowser, scan(ctx, profile) }</code>. Adding a source is one file plus one import. The registry is ordered by reliability — API sources first, login-gated scrapers last — because that ordering is also the order they appear in the UI and the order a user should trust them in.</p>
+
+      <h3>Two pools, two concurrency policies</h3>
+
+      <p>The scan runner splits targets by <code>requiresBrowser</code>:</p>
+
+      <ul>
+        <li><strong>API connectors</strong> are pure HTTP against unrelated hosts, so all of them run in parallel with <code>Promise.all</code>. Budget: 45&nbsp;s each.</li>
+        <li><strong>Browser connectors</strong> share one off-screen Chrome per profile. Tabs are cheap but too many simultaneously starves the renderer, so a hand-rolled worker pool caps in-flight scans at three. Budget: 120&nbsp;s each.</li>
+      </ul>
+
+      <p>Both budgets are enforced with <code>Promise.race</code> against a timer, not with per-request timeouts. The reason is specific: one wedged source used to stall the whole scan, because LinkedIn and Naukri could each sit in a 90-second CAPTCHA wait and simply never report.</p>
+
+      <div class="note measured">
+        <span class="note-k">Measured</span>
+        <p>The single worst latency bug in this layer was not in the scan loop at all — it was <code>safeText()</code> calling Playwright's <code>innerText()</code> with no timeout. A selector that no longer matched fell through to Playwright's 30-second actionability default. At exactly <strong>30,002&nbsp;ms per missing field</strong> and four to five fields read per card, the very first card burned the connector's whole 120-second budget, and the scan reported "timed out" when the truth was "the site changed its markup". The fix is a 2.5-second field timeout: far longer than a present element ever needs, short enough that a whole page of dead selectors costs seconds.</p>
+      </div>
+
+      <h3>Reporting three numbers, not one</h3>
+
+      <p>Connectors opt into <code>withFetched(jobs, n)</code>, which attaches a non-enumerable <code>fetched</code> count to the returned array. The scan then logs <em>fetched</em>, <em>matched</em> (survived keyword filtering) and <em>found</em> (actually new rows). A bare zero is ambiguous in three different ways — the source is broken, your keywords excluded everything, or you already have every job it offers — and only one of those is actionable.</p>
+
+      <h3>Walls: sign-in versus block</h3>
+
+      <p><code>detectWall(page)</code> classifies an obstruction as <code>login</code>, <code>captcha</code> or <code>blocked</code>, and connectors throw a tagged <code>wallError</code>. The scan runner raises a visible sign-in window for the first two and deliberately does <em>not</em> for the third — you cannot click your way out of an IP ban, so a window would be pure interruption. It also caps attention at <strong>one window per scan</strong>: an expired LinkedIn cookie previously opened three windows (linkedin, linkedinposts, naukri) when one sign-in fixes all of them.</p>
+
+      <h3>Cross-board de-duplication</h3>
+
+      <p>The same role scraped from four boards collapses to one entry via a canonical key computed at insert time:</p>
+
+      <pre><code>normalizeCompany("Acme, Inc.")  →  "acme"      // legal-form noise stripped
+normalizeTitle("Senior Backend Engineer (m/w/d) — Berlin")
+                                →  "senior backend engineer"
+canonicalJobKey(job)            →  "acme::senior backend engineer"</code></pre>
+
+      <p>The function returns an empty string when there is not enough signal — a missing company, or a title under four characters after normalisation. Callers then treat the row as unique. Merging two genuinely different jobs is a worse error than failing to merge two identical ones, so the ambiguous case falls to the safe side.</p>
+
+      <h3>Learning the apply type during the scan</h3>
+
+      <p>Most Naukri results are "Apply on company site", which auto-apply can do nothing with. Discovering that by opening each posting costs about five seconds a job. Instead the Naukri connector attaches a <code>page.on('response')</code> listener to the search page's own <code>/jobapi/v*/search</code> call — a request the page makes anyway — and reads <code>companyApplyJob</code> straight out of the JSON. No extra request, no header guessing, and nothing to keep in sync when the card markup changes. That flag lands in <code>jobs.apply_kind</code>, and external postings never enter a batch at all.</p>
+    </section>
+
+    <!-- ═══════════════════════════════════════════════════ 5 -->
+    <section id="s5">
+      <span class="sec-num">Section 05</span>
+      <h2>Fit scoring, deterministically</h2>
+
+      <p>Fit turns an undifferentiated pile of postings into a ranked shortlist. It is a weighted linear rule model over four components — no learning, no model file, no network.</p>
+
+      <figure>
+        <svg viewBox="0 0 880 250" role="img" aria-label="Fit score composition: skills 55 points, seniority 20, location 15, freshness 10, totalling 100, with the rule for each component annotated below.">
+          <defs>
+            <marker id="jf-tick" viewBox="0 0 6 6" refX="3" refY="3" markerWidth="4" markerHeight="4">
+              <circle cx="3" cy="3" r="2" fill="currentColor"/>
+            </marker>
+          </defs>
+
+          <text x="30" y="30" font-family="IBM Plex Mono, monospace" font-size="11" fill="currentColor" letter-spacing="1.2">SCORE = 0 – 100</text>
+
+          <!-- stacked bar -->
+          <rect x="30" y="44" width="451" height="40" fill="#2F6B4F" fill-opacity=".55" stroke="#2F6B4F" stroke-width="1"/>
+          <rect x="481" y="44" width="164" height="40" fill="#2F6B4F" fill-opacity=".33" stroke="#2F6B4F" stroke-width="1"/>
+          <rect x="645" y="44" width="123" height="40" fill="#2F6B4F" fill-opacity=".18" stroke="#2F6B4F" stroke-width="1"/>
+          <rect x="768" y="44" width="82" height="40" fill="#2F6B4F" fill-opacity=".08" stroke="#2F6B4F" stroke-width="1"/>
+
+          <text x="255" y="69" font-size="13.5" text-anchor="middle" fill="currentColor" font-weight="600">skills · 55</text>
+          <text x="563" y="69" font-size="13" text-anchor="middle" fill="currentColor">seniority · 20</text>
+          <text x="706" y="69" font-size="13" text-anchor="middle" fill="currentColor">location · 15</text>
+          <text x="809" y="69" font-size="12" text-anchor="middle" fill="currentColor">fresh · 10</text>
+
+          <!-- rules -->
+          <line x1="255" y1="90" x2="255" y2="108" stroke="currentColor" stroke-width="1"/>
+          <text x="150" y="126" font-size="12" fill="currentColor">55 × (matched ÷ required)</text>
+          <text x="150" y="143" font-size="11.5" fill="currentColor" opacity=".72">dictionary match, JD ∩ CV.</text>
+          <text x="150" y="158" font-size="11.5" fill="currentColor" opacity=".72">No recognisable skills → 27.5,</text>
+          <text x="150" y="173" font-size="11.5" fill="currentColor" opacity=".72">flagged <tspan font-style="italic">low confidence</tspan>.</text>
+
+          <line x1="563" y1="90" x2="563" y2="108" stroke="currentColor" stroke-width="1"/>
+          <text x="500" y="126" font-size="12" fill="currentColor">ladder distance</text>
+          <text x="500" y="143" font-size="11.5" fill="currentColor" opacity=".72">gap 0 → 20 · +1 → 14</text>
+          <text x="500" y="158" font-size="11.5" fill="currentColor" opacity=".72">−1 → 11 · ≥+2 → 4</text>
+          <text x="500" y="173" font-size="11.5" fill="currentColor" opacity=".72">unknown → 13</text>
+
+          <line x1="706" y1="90" x2="706" y2="108" stroke="currentColor" stroke-width="1"/>
+          <text x="672" y="126" font-size="12" fill="currentColor">remote = full</text>
+          <text x="672" y="143" font-size="11.5" fill="currentColor" opacity=".72">match = full</text>
+          <text x="672" y="158" font-size="11.5" fill="currentColor" opacity=".72">unstated = 9</text>
+          <text x="672" y="173" font-size="11.5" fill="currentColor" opacity=".72">outside = 0</text>
+
+          <line x1="809" y1="90" x2="809" y2="108" stroke="currentColor" stroke-width="1"/>
+          <text x="790" y="126" font-size="12" fill="currentColor">≤ 7 d → 10</text>
+          <text x="790" y="143" font-size="11.5" fill="currentColor" opacity=".72">linear decay</text>
+          <text x="790" y="158" font-size="11.5" fill="currentColor" opacity=".72">→ 0 at 60 d</text>
+
+          <!-- bands -->
+          <line x1="30" y1="205" x2="850" y2="205" stroke="currentColor" stroke-width="1" opacity=".35"/>
+          <text x="30" y="199" font-family="IBM Plex Mono, monospace" font-size="10.5" fill="currentColor" opacity=".7">0</text>
+          <line x1="440" y1="198" x2="440" y2="212" stroke="currentColor" stroke-width="1" opacity=".5"/>
+          <text x="440" y="228" font-size="11.5" text-anchor="middle" fill="currentColor" opacity=".8">50 — possible</text>
+          <line x1="604" y1="198" x2="604" y2="212" stroke="#2F6B4F" stroke-width="1.6"/>
+          <text x="604" y="228" font-size="11.5" text-anchor="middle" fill="currentColor" font-weight="600">70 — strong</text>
+          <text x="850" y="199" font-family="IBM Plex Mono, monospace" font-size="10.5" text-anchor="end" fill="currentColor" opacity=".7">100</text>
+        </svg>
+        <figcaption><b>The weights are the argument.</b> Skills carry more than half the score because a mismatch there is the one thing that reliably ends an application; freshness carries only ten because a stale posting is a lower-probability reply, not a wrong role. Bands are advisory labels over the same number, not a separate classifier.</figcaption>
+      </figure>
+
+      <h3>Confidence is reported separately from score</h3>
+
+      <p>This is the design detail that makes the number usable. <code>scoreJob</code> returns <code>{ score, band, matched, missing, reasons, confidence }</code>, and <code>confidence</code> answers a different question: <em>how much did we actually know?</em></p>
+
+      <ul>
+        <li>No CV text over 200 characters → <code>low</code>, whatever the score says.</li>
+        <li>No recognisable skills in the posting → <code>low</code>, and the skills component is awarded a neutral 27.5 rather than zero. Punishing a job for a thin description would rank a well-written ad for a bad role above a terse ad for a good one.</li>
+        <li>Fewer than three detected requirements → <code>medium</code>.</li>
+      </ul>
+
+      <p>Every score also ships its own explanation: the list of requirements you meet, the list you miss, and four plain-language reason strings. The stated principle is that a number you cannot interrogate is worse than no number.</p>
+
+      <h3>The seniority ladder scans highest-first</h3>
+
+      <p>Six ranked levels — intern, junior, mid, senior, staff, executive — each with a regex covering English and German phrasing. Detection iterates from <em>executive downwards</em> so that "Senior Staff Engineer" resolves to staff, not senior. "Head of X" is classified as executive rather than staff for a consistency reason: otherwise "Head of Engineering" and "Head of Machine Learning" would land on different rungs, which is indefensible to a user reading the explanation.</p>
+
+      <h3>The candidate side</h3>
+
+      <p><code>candidateSkillProfile()</code> unions three evidence sources — extracted CV text, the profile bio and keywords, and every saved answer rendered as <code>"label: value"</code> — then runs the same dictionary matcher used on the job description. Using one matcher on both sides is what makes the comparison meaningful: the "Kubernetes" that puts a topic on your study list is the same token matched against your CV.</p>
+
+      <h3>Freshness has a basis, not just an age</h3>
+
+      <p><code>lib/freshness.js</code> parses five distinct <code>posted_at</code> shapes observed live in the database — ISO with offset, ISO with Z, bare ISO, RFC-2822, and relative text like "3 days ago" or LinkedIn's compact "2h" — and rejects implausible values (before 2000, more than a day in the future). About <strong>24%</strong> of rows carry no published date at all, because Naukri, LinkedIn, Y&nbsp;Combinator and Wellfound do not print one on their listing pages.</p>
+
+      <p>So <code>freshnessOf()</code> returns <code>{ at, basis, ageDays }</code> where <code>basis</code> is either <code>'posted'</code> or <code>'seen'</code>. Claiming "posted today" when the source never said so is a claim the system cannot support, and acting on a wrong posted date costs exactly the first-mover advantage the feature exists to provide. The <code>"mo"</code> unit is tested before <code>"m"</code> in the relative-time regex, or months would be read as minutes.</p>
+    </section>
+
+    <!-- ═══════════════════════════════════════════════════ 6 -->
+    <section id="s6">
+      <span class="sec-num">Section 06</span>
+      <h2>Retrieval: the embedding decision</h2>
+
+      <p class="lede">This is the one place in JobFinder where a model choice was settled by running an experiment, and where the obvious default turned out to be actively harmful.</p>
+
+      <h3>What retrieval has to do</h3>
+
+      <p>Application forms ask the same twenty facts in a hundred phrasings. "Total years of experience", "Experience (years)", "How many years have you worked in this field?" are one question. Exact-key matching handles the identical case; a canonicaliser (<code>lib/answerBank.js :: canonicalKey</code>) collapses seventeen common families by regex; everything else needs semantic similarity.</p>
+
+      <p>So each answer row stores a vector of <code>label + "\n" + value</code>, embedded at write time. At read time the incoming field label is embedded and cosine-ranked against every approved row.</p>
+
+      <h3>Why <code>nomic-embed-text</code> failed</h3>
+
+      <p>The project shipped with <code>nomic-embed-text</code>, the obvious default. Its vectors turn out to be dominated by a single component — roughly &minus;3.7 where every other dimension is around 0.1 — and that component barely moves with the text. Cosine similarity is then measuring almost nothing but that constant. On the real answer bank it scored the unrelated pair <em>"Expected CTC"</em> against <em>"City: Berlin"</em> at <strong>1.000</strong>, and got 1 of 8 answerable questions right.</p>
+
+      <p>That is not a quality gap; it is a failure mode with a direction. High-confidence false matches get written into forms, and because the observer records what lands in a field, a wrong guess was then learned back into the bank as an exact-key answer — which the next run filled with total confidence, never reaching the vector stage at all. One bad guess became twelve bad rows. (The fix for that second half is in <a href="#s8">§8</a>.)</p>
+
+      <div class="table-wrap">
+        <table>
+          <caption>Seventeen real form questions against a 35-row answer bank. "Separated" means every false match scored below every threshold at which the system fills verbatim.</caption>
+          <thead>
+            <tr><th>Embedding model</th><th class="num">Correct</th><th>True-match cosine</th><th>False-match cosine</th><th>Verdict</th><th class="num">Size</th></tr>
+          </thead>
+          <tbody>
+            <tr><td><code>nomic-embed-text</code></td><td class="num">1 / 8</td><td class="num">0.58 – 0.62</td><td class="num">0.60 – 1.00</td><td>Overlapping</td><td class="num">274 MB</td></tr>
+            <tr><td><code>mxbai-embed-large</code></td><td class="num">6 / 10</td><td class="num">0.65 +</td><td class="num">up to 0.67</td><td>Overlapping</td><td class="num">670 MB</td></tr>
+            <tr><td><strong><code>all-minilm</code></strong></td><td class="num"><strong>8 / 10</strong></td><td class="num">0.35 – 0.90</td><td class="num">up to 0.46</td><td><strong>Separated</strong></td><td class="num">46 MB</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <figure>
+        <svg viewBox="0 0 880 300" role="img" aria-label="Cosine similarity ranges for three embedding models. Only all-minilm keeps every false match below the 0.55 verbatim-fill threshold; nomic and mxbai false matches extend past it.">
+
+          <!-- axis -->
+          <line x1="150" y1="256" x2="840" y2="256" stroke="currentColor" stroke-width="1"/>
+          <g font-family="IBM Plex Mono, monospace" font-size="10.5" fill="currentColor" opacity=".7" text-anchor="middle">
+            <text x="150" y="274">0.0</text><text x="288" y="274">0.2</text><text x="426" y="274">0.4</text>
+            <text x="564" y="274">0.6</text><text x="702" y="274">0.8</text><text x="840" y="274">1.0</text>
+          </g>
+          <text x="495" y="292" font-size="11.5" text-anchor="middle" fill="currentColor" opacity=".75">cosine similarity between a form question and a stored answer</text>
+
+          <!-- threshold lines -->
+          <line x1="357" y1="34" x2="357" y2="256" stroke="currentColor" stroke-width="1" stroke-dasharray="4 4" opacity=".55"/>
+          <text x="357" y="26" font-size="11" text-anchor="middle" fill="currentColor" opacity=".8">0.30 — used as LLM context</text>
+          <line x1="529" y1="34" x2="529" y2="256" stroke="#2F6B4F" stroke-width="2"/>
+          <text x="529" y="26" font-size="11.5" text-anchor="middle" fill="currentColor" font-weight="600">0.55 — filled verbatim</text>
+
+          <!-- rows -->
+          <g font-size="12.5" fill="currentColor">
+            <text x="140" y="66" text-anchor="end">nomic-embed-text</text>
+            <text x="140" y="82" text-anchor="end" font-size="10.5" opacity=".65">1 / 8 correct</text>
+            <rect x="564" y="48" width="276" height="14" fill="currentColor" fill-opacity=".13" stroke="currentColor" stroke-width=".9" stroke-dasharray="3 2"/>            <rect x="550" y="66" width="28" height="14" fill="#2F6B4F" fill-opacity=".55" stroke="#2F6B4F" stroke-width=".8"/>
+
+            <text x="140" y="136" text-anchor="end">mxbai-embed-large</text>
+            <text x="140" y="152" text-anchor="end" font-size="10.5" opacity=".65">6 / 10 correct</text>
+            <rect x="426" y="118" width="186" height="14" fill="currentColor" fill-opacity=".13" stroke="currentColor" stroke-width=".9" stroke-dasharray="3 2"/>
+            <rect x="598" y="136" width="242" height="14" fill="#2F6B4F" fill-opacity=".55" stroke="#2F6B4F" stroke-width=".8"/>
+
+            <text x="140" y="206" text-anchor="end" font-weight="600">all-minilm</text>
+            <text x="140" y="222" text-anchor="end" font-size="10.5" opacity=".65">8 / 10 correct</text>
+            <rect x="219" y="188" width="248" height="14" fill="currentColor" fill-opacity=".13" stroke="currentColor" stroke-width=".9" stroke-dasharray="3 2"/>
+            <rect x="391" y="206" width="380" height="14" fill="#2F6B4F" fill-opacity=".55" stroke="#2F6B4F" stroke-width=".8"/>
+          </g>
+
+          <!-- legend -->
+          <rect x="150" y="46" width="14" height="12" fill="currentColor" fill-opacity=".13" stroke="currentColor" stroke-width=".9" stroke-dasharray="3 2"/>
+          <text x="170" y="56" font-size="11.5" fill="currentColor">false matches</text>
+          <rect x="150" y="66" width="14" height="12" fill="#2F6B4F" fill-opacity=".55" stroke="#2F6B4F" stroke-width=".8"/>
+          <text x="170" y="76" font-size="11.5" fill="currentColor">true matches</text>
+        </svg>
+        <figcaption><b>Separation, not absolute score, is what matters.</b> <code>all-minilm</code>'s cosines run <em>lower</em> in absolute terms than the alternatives — but every false match lands below 0.46, so the 0.55 verbatim-fill line has nothing wrong above it. With the other two, false matches sit on the wrong side of that line, which is how "India" ended up typed into an <em>Expected CTC</em> field.</figcaption>
+      </figure>
+
+      <div class="note">
+        <span class="note-k">Coupled constants</span>
+        <p>Because <code>all-minilm</code>'s scores run lower, <code>SIM_THRESHOLD</code> in <code>lib/knowledge.js</code> was retuned from 0.45 to <strong>0.30</strong>. Genuine matches in this bank go as low as 0.35 ("Which university did you attend?" → school). The two constants are a pair: changing the embedding model without re-measuring the threshold silently breaks retrieval, so the source says so at both sites.</p>
+      </div>
+
+      <h3>Two thresholds, two jobs</h3>
+
+      <dl class="defs">
+        <dt>0.30 — <code>SIM_THRESHOLD</code>, knowledge.js</dt>
+        <dd>The bar for <em>being shown to the model as grounding context</em>. Low, because a loosely related answer still helps the LLM avoid inventing, and the LLM can decline.</dd>
+        <dt>0.55 — <code>SEMANTIC_CONFIDENT</code>, autofill.js and autoApply.js</dt>
+        <dd>The bar for <em>typing a stored value into a form verbatim, unsupervised</em>. Deliberately not lowered for auto-apply, which has <em>less</em> human oversight, not more.</dd>
+        <dt>0.52 — prep KB, kb.js</dt>
+        <dd>A third, independently tuned bar for the study-notes Q&amp;A. Measured against its own corpus: off-topic questions ("how do I cook risotto?") still reach 0.35–0.45 against study prose, so 0.35 would have let them claim to be grounded.</dd>
+      </dl>
+
+      <h3>Self-healing on a model change</h3>
+
+      <p><code>cosine()</code> returns 0 on a length mismatch, so after an embedding-model swap every stored vector silently scores zero and the bank goes quiet rather than wrong. That is the safe failure, but it is still a failure. <code>backfillEmbeddings()</code> therefore probes the live model for its dimension, compares it against every stored vector's length, and re-embeds anything that does not match. The answer bank is the one piece of user data an upgrade must never invalidate.</p>
+
+      <h3>The retrieval ladder</h3>
+
+      <figure>
+        <svg viewBox="0 0 880 210" role="img" aria-label="Retrieval ladder: a field label is tried against exact key match, then cosine similarity above 0.55, then the LLM with retrieved context, and finally left blank.">
+          <defs>
+            <marker id="jf-a2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="currentColor"/>
+            </marker>
+          </defs>
+          <rect x="24" y="66" width="126" height="52" rx="3" fill="none" stroke="currentColor" stroke-width="1.2"/>
+          <text x="87" y="88" font-size="12.5" text-anchor="middle" fill="currentColor">field label</text>
+          <text x="87" y="105" font-size="10.5" text-anchor="middle" fill="currentColor" opacity=".7">from the page</text>
+
+          <line x1="150" y1="92" x2="196" y2="92" stroke="currentColor" stroke-width="1.2" marker-end="url(#jf-a2)"/>
+
+          <rect x="198" y="66" width="140" height="52" rx="3" fill="none" stroke="currentColor" stroke-width="1.2"/>
+          <text x="268" y="88" font-size="12.5" text-anchor="middle" fill="currentColor">canonical key</text>
+          <text x="268" y="105" font-size="10.5" text-anchor="middle" fill="currentColor" opacity=".7">exact row hit?</text>
+
+          <line x1="338" y1="92" x2="384" y2="92" stroke="currentColor" stroke-width="1.2" marker-end="url(#jf-a2)"/>
+
+          <rect x="386" y="66" width="140" height="52" rx="3" fill="none" stroke="currentColor" stroke-width="1.2"/>
+          <text x="456" y="88" font-size="12.5" text-anchor="middle" fill="currentColor">cosine top-K</text>
+          <text x="456" y="105" font-size="10.5" text-anchor="middle" fill="currentColor" opacity=".7">best ≥ 0.55?</text>
+
+          <line x1="526" y1="92" x2="572" y2="92" stroke="currentColor" stroke-width="1.2" marker-end="url(#jf-a2)"/>
+
+          <rect x="574" y="66" width="140" height="52" rx="3" fill="none" stroke="currentColor" stroke-width="1.2" stroke-dasharray="5 3"/>
+          <text x="644" y="88" font-size="12.5" text-anchor="middle" fill="currentColor">LLM draft</text>
+          <text x="644" y="105" font-size="10.5" text-anchor="middle" fill="currentColor" opacity=".7">hits ≥ 0.30 as context</text>
+
+          <line x1="714" y1="92" x2="760" y2="92" stroke="currentColor" stroke-width="1.2" marker-end="url(#jf-a2)"/>
+          <rect x="762" y="66" width="94" height="52" rx="3" fill="none" stroke="currentColor" stroke-width="1.2"/>
+          <text x="809" y="88" font-size="12.5" text-anchor="middle" fill="currentColor">[BLANK]</text>
+          <text x="809" y="105" font-size="10.5" text-anchor="middle" fill="currentColor" opacity=".7">left empty</text>
+
+          <!-- yes exits -->          <g>
+            <line x1="268" y1="66" x2="268" y2="36" stroke="#2F6B4F" stroke-width="1.4" marker-end="url(#jf-arrow-a)"/>
+            <line x1="456" y1="66" x2="456" y2="36" stroke="#2F6B4F" stroke-width="1.4" marker-end="url(#jf-arrow-a)"/>
+            <line x1="644" y1="66" x2="644" y2="36" stroke="#2F6B4F" stroke-width="1.4" marker-end="url(#jf-arrow-a)"/>
+            <line x1="240" y1="30" x2="672" y2="30" stroke="#2F6B4F" stroke-width="1.4"/>
+            <text x="456" y="20" font-size="12" text-anchor="middle" fill="currentColor" font-weight="600">fill the field</text>
+          </g>
+          <text x="268" y="140" font-size="11" text-anchor="middle" fill="currentColor" opacity=".7">approved rows only</text>
+          <text x="456" y="140" font-size="11" text-anchor="middle" fill="currentColor" opacity=".7">approved rows only</text>
+          <text x="644" y="140" font-size="11" text-anchor="middle" fill="currentColor" opacity=".7">never invents a fact</text>
+
+          <text x="24" y="180" font-size="11.5" fill="currentColor" opacity=".8">Auto-apply uses the same ladder with the last two rungs removed: no LLM, and an unanswerable field parks a question instead of leaving a blank.</text>
+        </svg>
+        <figcaption><b>Cheapest, most certain first.</b> Each rung is strictly more expensive and strictly less certain than the one before it. The gate on rungs one and two is <code>status = 'approved'</code>, applied inside <code>retrieve()</code> so that it covers every consumer at once — an unreviewed answer can neither be typed into a form nor quoted back by the model.</figcaption>
+      </figure>
+    </section>
+
+    <!-- ═══════════════════════════════════════════════════ 7 -->
+    <section id="s7">
+      <span class="sec-num">Section 07</span>
+      <h2>The language-model layer</h2>
+
+      <p><code>lib/llm.js</code> is a thin Ollama client with four opinions baked into it, each traceable to a failure.</p>
+
+      <h3>Instruct models, not reasoning models</h3>
+
+      <p>The project originally used <code>deepseek-r1:8b</code>. Reasoning models emit a <code>&lt;think&gt;</code> block before any answer. Autofill asks for short answers at <code>num_predict: 80</code> — so the entire budget went into thinking, <code>stripThinking()</code> removed all of it, and the function returned an empty string. Not slow: <em>silently failing</em>.</p>
+
+      <div class="table-wrap">
+        <table>
+          <caption>Four ordinary short fields — notice period, years of experience, work authorisation, expected CTC — at <code>num_predict: 80</code>.</caption>
+          <thead><tr><th>Model</th><th class="num">Latency</th><th>Result</th></tr></thead>
+          <tbody>
+            <tr><td><code>deepseek-r1:8b</code></td><td class="num">19.3 s</td><td>All four empty</td></tr>
+            <tr><td><strong><code>qwen2.5:7b-instruct</code></strong></td><td class="num"><strong>2.9 s</strong></td><td><strong>All four correct</strong></td></tr>
+            <tr><td><code>qwen2.5:3b-instruct</code></td><td class="num">3.1 s</td><td>Two wrong — invented a salary figure</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <p>The 3B was no faster once warm and materially less accurate, which is the wrong trade for text that goes into a real application. Using the same model for chat and for bulk synthesis also means <em>one</em> model resident instead of two — on a 16&nbsp;GB machine, deepseek (5.2&nbsp;GB) plus qwen (4.7&nbsp;GB) pinned for thirty minutes alongside Chrome is what produced an Ollama stall during development.</p>
+
+      <p>When a response strips down to nothing but was non-empty before stripping, the client logs a loud, specific warning naming <code>num_predict</code> and <code>done_reason</code> — because that failure is invisible at the call site and previously surfaced as "skill extraction returns zero results".</p>
+
+      <h3>Every call has a deadline</h3>
+
+      <p>A request Ollama accepts but never generates for hangs forever, and anything awaiting it hangs with it. Observed during a prep build: two connections open to <code>:11434</code>, the model loaded, the runner at 3.7% CPU — not generating, not erroring. <code>DEFAULT_TIMEOUT_MS</code> (240&nbsp;s, overridable) turns that into an error. Critically, <strong>a timeout is not retried</strong>: transient network errors get exponential backoff at 1&nbsp;s / 2&nbsp;s / 4&nbsp;s, but a wedged model is surfaced with a message naming the fix, because hammering it again just burns another four minutes.</p>
+
+      <h3>Model resolution is capability-based</h3>
+
+      <p><code>resolveChatModel()</code> and <code>resolveSynthModel()</code> follow the same shape: an explicit per-profile setting wins; otherwise the best installed instruct model from a preference list; otherwise the default tag. The installed-model set is cached for 60 seconds off <code>/api/tags</code>. This means installing a larger instruct model is all it takes to speed up prep, and a fresh machine with some other model does not fail on the first autofill by requesting a tag it does not have.</p>
+
+      <h3>Pinned to IPv4, and kept warm</h3>
+
+      <p>The default URL is <code>http://127.0.0.1:11434</code>, not <code>localhost</code>. Node 18+ resolves <code>localhost</code> via DNS and on some macOS configurations reaches <code>::1</code> first, where Ollama — which binds 127.0.0.1 by default — is not listening, producing a cryptic <code>fetch failed</code>. <code>keep_alive: '30m'</code> keeps the model resident between calls so the first real autofill after a pause is not a cold load.</p>
+
+      <h3>Output hygiene</h3>
+
+      <p>Asked to write a form answer, an instruct model opens with <em>"Certainly! Here's a detailed response to describe a project…"</em> — and that sentence would be typed straight into an employer's textarea. <code>stripPreamble()</code> removes a leading conversational wrapper, but only under guards worth stating because the naive version destroyed data:</p>
+
+      <ul>
+        <li>The preamble regex terminates on <code>:</code> or <code>!</code> and <strong>never on <code>.</code></strong>. An earlier version allowed <code>.</code> with a greedy run before it, so the match ran to the <em>last</em> full stop and swallowed the whole answer.</li>
+        <li>If stripping leaves fewer than 20 characters, the original is kept. Trimming an answer to nothing is worse than leaving the preamble in.</li>
+        <li>At most two passes, then a leading markdown heading is removed — the same problem in a different costume.</li>
+      </ul>
+
+      <p>Structured output uses Ollama's <code>format: "json"</code> to constrain decoding, plus a hand-rolled <code>extractJson()</code> that peels code fences and then brace-matches from the first <code>[</code> or <code>{</code>. That function appears in five modules; it is duplicated rather than shared because each copy is small and the modules are otherwise independent.</p>
+    </section>
+
+    <!-- ═══════════════════════════════════════════════════ 8 -->
+    <section id="s8">
+      <span class="sec-num">Section 08</span>
+      <h2>Autofill and the observer</h2>
+
+      <p>The observer (<code>lib/observer.js</code>) is a self-contained IIFE injected into every page and frame. It cannot import modules — it runs inside a hostile page — so it carries its own copies of the canonicaliser and the label walker. <code>scripts/check-canon-parity.mjs</code> asserts that its <code>CANON</code> table matches the server-side one, so drift fails a check instead of silently splitting the bank in two.</p>
+
+      <h3>What it refuses to touch</h3>
+
+      <p>Three categories are excluded from both filling and learning:</p>
+
+      <ul>
+        <li><strong>Honeypots</strong> — measured, not guessed. A field is a trap if it is <code>type=hidden</code>, under 2&nbsp;px in either dimension, positioned off-screen, <code>display:none</code> / <code>visibility:hidden</code> / opacity under 0.05, <code>aria-hidden</code>, or has no <code>offsetParent</code> while not fixed. Completing an invisible field is a self-inflicted bot verdict — it is the one field on a page a real user cannot fill.</li>
+        <li><strong>CAPTCHAs</strong> — unanswerable, and an answer poisons the bank.</li>
+        <li><strong>The board's own search box</strong> — it sits on the same page as the application but describes what you were looking for, not who you are.</li>
+      </ul>
+
+      <p>Sensitive types (<code>password</code>, <code>cvv</code>, <code>card</code>, <code>ssn</code>, <code>secret</code>, <code>otp</code>, <code>verif</code>) are excluded at the point of capture, before anything is stored.</p>
+
+      <h3>The feedback loop, and closing it</h3>
+
+      <div class="note danger">
+        <span class="note-k">The bug this prevents</span>
+        <p><code>setNativeValue</code> dispatches <code>input</code> and <code>change</code> so the host page's framework notices the write. <em>The observer listens to those same events.</em> So every value autofill guessed was immediately recorded as though the user had typed it. A weak semantic guess — "certifications" → "Kolkata" — became an exact-key answer, which the next run filled with total confidence, never reaching the vector stage at all. One wrong guess turned into twelve bad rows.</p>
+        <p>The fix: tag anything written by the machine (<code>el.__jfMachine = value</code>) and refuse to learn from it. Only a human keystroke creates knowledge. If the user later edits the field, the value no longer matches the tag and it is learned normally — the correction is exactly what should be captured.</p>
+      </div>
+
+      <h3>The offline buffer</h3>
+
+      <p><code>window.__jobfinderObserve</code> is a Playwright <code>exposeBinding</code>: it exists only while an automation client is attached. Under the lazy-attach model (<a href="#s11">§11</a>) that is a roughly two-second window during Autofill — so everything typed <em>afterwards</em> (the corrections, the fields the LLM left blank, the answers written just before Submit) reached nothing and was lost.</p>
+
+      <p>But the observer is ordinary page JavaScript and keeps running with zero automation attached. It just needs somewhere to put what it sees. So every observation is also written to <code>localStorage</code> under <code>__jobfinder_buffer_v1</code>, last-write-per-key, capped at 200 entries; the next attach calls <code>__jobfinderDrainBuffer()</code> and clears it. Nothing about this weakens the detached-for-verification property — no CDP client, no network, purely a same-origin key/value write.</p>
+
+      <h3>Write-time re-validation</h3>
+
+      <p>There can be <em>minutes</em> between the scan that identified a field and the write that fills it: the LLM pass drafts up to twelve fields two at a time, and each draft is a full local generation. You keep typing during that wait. So <code>__jobfinderSetByPath</code> re-checks the live DOM rather than trusting the snapshot.</p>
+
+      <figure>
+        <svg viewBox="0 0 880 300" role="img" aria-label="Write path: the setter checks element presence, disabled state, focus, and existing content before writing, returning a distinct reason code for each refusal.">
+          <defs>
+            <marker id="jf-a3" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="currentColor"/>
+            </marker>
+            <marker id="jf-a3s" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#9A6410"/>
+            </marker>
+          </defs>
+
+          <rect x="24" y="24" width="176" height="46" rx="3" fill="none" stroke="currentColor" stroke-width="1.2"/>
+          <text x="112" y="44" font-size="12.5" text-anchor="middle" fill="currentColor">value ready to write</text>
+          <text x="112" y="60" font-size="10.5" text-anchor="middle" fill="currentColor" opacity=".7">bank hit or LLM draft</text>
+
+          <g font-size="12.5" fill="currentColor">
+            <line x1="112" y1="70" x2="112" y2="94" stroke="currentColor" stroke-width="1.2" marker-end="url(#jf-a3)"/>
+            <rect x="24" y="96" width="176" height="36" rx="3" fill="none" stroke="currentColor" stroke-width="1"/>
+            <text x="112" y="119" text-anchor="middle">element still present?</text>
+
+            <line x1="112" y1="132" x2="112" y2="152" stroke="currentColor" stroke-width="1.2" marker-end="url(#jf-a3)"/>
+            <rect x="24" y="154" width="176" height="36" rx="3" fill="none" stroke="currentColor" stroke-width="1"/>
+            <text x="112" y="177" text-anchor="middle">enabled &amp; writable?</text>
+
+            <line x1="112" y1="190" x2="112" y2="210" stroke="currentColor" stroke-width="1.2" marker-end="url(#jf-a3)"/>
+            <rect x="24" y="212" width="176" height="36" rx="3" fill="none" stroke="currentColor" stroke-width="1"/>
+            <text x="112" y="235" text-anchor="middle">is it focused right now?</text>
+
+            <line x1="200" y1="266" x2="200" y2="266" stroke="none"/>
+            <line x1="112" y1="248" x2="112" y2="266" stroke="currentColor" stroke-width="1.2" marker-end="url(#jf-a3)"/>
+            <rect x="24" y="268" width="176" height="26" rx="3" fill="#2F6B4F" fill-opacity=".12" stroke="#2F6B4F" stroke-width="1.2"/>
+            <text x="112" y="286" text-anchor="middle" font-weight="600">write · reason: filled</text>
+          </g>
+
+          <!-- refusals -->
+          <g font-size="12" fill="currentColor">
+            <line x1="200" y1="114" x2="300" y2="114" stroke="#9A6410" stroke-width="1.2" marker-end="url(#jf-a3s)"/>
+            <text x="308" y="111">no →</text>
+            <text x="348" y="111" font-family="IBM Plex Mono, monospace" font-size="11.5">gone</text>
+            <text x="404" y="111" opacity=".72">— framework replaced the node; retry via CSS path</text>
+
+            <line x1="200" y1="172" x2="300" y2="172" stroke="#9A6410" stroke-width="1.2" marker-end="url(#jf-a3s)"/>
+            <text x="308" y="169">no →</text>
+            <text x="348" y="169" font-family="IBM Plex Mono, monospace" font-size="11.5">locked</text>
+            <text x="414" y="169" opacity=".72">— disabled or readonly</text>
+
+            <line x1="200" y1="230" x2="300" y2="230" stroke="#9A6410" stroke-width="1.2" marker-end="url(#jf-a3s)"/>
+            <text x="308" y="227">yes →</text>
+            <text x="354" y="227" font-family="IBM Plex Mono, monospace" font-size="11.5">focused</text>
+            <text x="428" y="227" opacity=".72">— your cursor is in it; never overwrite</text>
+
+            <line x1="200" y1="281" x2="300" y2="281" stroke="#9A6410" stroke-width="1.2" marker-end="url(#jf-a3s)"/>
+            <text x="308" y="278">has text →</text>
+            <text x="378" y="278" font-family="IBM Plex Mono, monospace" font-size="11.5">occupied</text>
+            <text x="464" y="278" opacity=".72">— you typed while we drafted; yours is kept</text>
+            <text x="378" y="296" font-family="IBM Plex Mono, monospace" font-size="11.5">already</text>
+            <text x="464" y="296" opacity=".72">— identical value; an idempotent re-run, not a conflict</text>
+          </g>
+
+          <text x="308" y="46" font-size="11.5" fill="currentColor" opacity=".8">Refusing to write is always the safe outcome:</text>
+          <text x="308" y="62" font-size="11.5" fill="currentColor" opacity=".8">a blank field costs a moment, an overwritten one costs the answer.</text>
+        </svg>
+        <figcaption><b>Every refusal has a distinct reason code</b>, and <code>occupied</code> / <code>focused</code> surface in the log as "you typed <em>x</em> while I was drafting — kept yours, discarded mine". Distinguishing them from <code>gone</code> and <code>locked</code> is what lets the caller retry sensibly instead of guessing.</figcaption>
+      </figure>
+
+      <h3>Frames, selects and concurrency</h3>
+
+      <p>Autofill walks <em>every frame</em> of the target page. Workday, Greenhouse Embedded, Lever, iCIMS and SmartRecruiters all render the form inside one or more nested iframes; the top frame alone shows zero fields. Target selection defaults to the currently visible tab (<code>document.visibilityState === 'visible'</code>), falling back to the most recently opened page, because pressing Autofill while looking at step 3 of a form should fill step 3.</p>
+
+      <p>Concurrency is bounded by a tiny <code>pMap</code>: six parallel embedding lookups, two parallel LLM drafts (Ollama handles about two concurrent generations comfortably), and a hard cap of twelve LLM-filled fields per page so a giant form does not take forever.</p>
+
+      <p><code>&lt;select&gt;</code> elements need their own path. Calling the <code>HTMLInputElement</code> value setter on one throws "illegal invocation", which an earlier catch swallowed — so dropdowns silently never filled. The observer now matches an option by value <em>or</em> visible text and sets <code>selectedIndex</code>; if nothing matches it leaves the element alone rather than forcing a bad value, because setting a <code>&lt;select&gt;</code> to a value it does not have silently sets nothing.</p>
+
+      <h3>The review queue</h3>
+
+      <p>New captures land at <code>status = 'pending'</code> and are invisible to autofill until approved. Editing an approved answer sends it back to pending — the point of the gate is that nothing reaches a form without the user's say-so, including a changed value. A rejection is durable: re-harvesting the same page will not re-queue a value the user already rejected, or you would be rejecting the same row forever.</p>
+
+      <p>Beneath the queue sits a second line of defence, <code>junkReason()</code>, which rejects rows before they reach the bank at all. It is worth reading as a catalogue of how form-capture goes wrong: type/value contradictions (an "email" that is not an email, a "linkedin url" that is "Kolkata"), a one-word answer to a 60-character essay prompt, a paragraph answering a yes/no question — but only when the question really is yes/no, since "Have you worked with APIs, and if so in what context?" opens yes/no and then asks for prose — a placeholder used as a question ("Type your answer here" tells you nothing about what was asked), and a country stored as a dialling code.</p>
+    </section>
+
+    <!-- ═══════════════════════════════════════════════════ 9 -->
+    <section id="s9">
+      <span class="sec-num">Section 09</span>
+      <h2>Auto-apply: the refusal engine</h2>
+
+      <p class="lede">This is the only subsystem that produces an irreversible external effect. Its central mechanism is not filling — it is stopping.</p>
+
+      <h3>The rule</h3>
+
+      <p>If the form asks something the answer bank cannot answer, the run stops. The LLM is not consulted. A drafted paragraph about why you want the job is a writing task and the model is good at it; <em>"how many years of Kubernetes do you have"</em> is a fact about you, and a model that has never met you cannot supply it. Getting that wrong is not a cosmetic bug — it is a false statement on a real application, sent under your name, that you cannot retract.</p>
+
+      <p>So <code>resolveAnswer()</code> has exactly two branches, <code>{ value }</code> and <code>{ missing: true }</code>. There is deliberately no third branch that asks a model.</p>
+
+      <h3>Parked questions, keyed like answers</h3>
+
+      <p>An unanswerable field is written to the <code>answers</code> table with an <strong>empty value</strong> and <code>status = 'needs_input'</code>. Retrieval only ever reads <code>approved</code> rows, so a parked question can never be used as an answer — by autofill or by the model — until the user fills it in. Because it is keyed by <code>field_key</code> like every other answer, the same question asked by a second employer resolves to the same row: <em>answer it once, and every job waiting on it unblocks together.</em></p>
+
+      <p>Three subtleties keep that loop from breaking:</p>
+
+      <ul>
+        <li><strong><code>needs_input</code> means empty, always.</strong> Re-parking clears the value. A row that keeps a stale value looks answered in the bank while retrieval ignores it — which is exactly how a question ends up permanently stuck.</li>
+        <li><strong>The <code>replace</code> escape hatch.</strong> Sometimes the bank <em>has</em> an answer that the form will not accept (a city for a dropdown listing only other cities). Without a flag, <code>parkQuestion</code> refuses it as already-known, the question never reaches the user, and every run keeps reporting it as the blocker.</li>
+        <li><strong>Only invalidate what was actually attempted.</strong> A field the form flags as invalid that we never wrote to is simply an empty required field — not evidence that the stored answer is wrong. Re-parking it unconditionally flips an answered row back to <code>needs_input</code>, where retrieval cannot see it, so the next run parks it again. The user fills it in, and the run quietly undoes that every time. The engine therefore tracks an <code>attempted</code> set per run and only invalidates keys in it.</li>
+      </ul>
+
+      <h3>Two sites, two different dangers</h3>
+
+      <figure>
+        <svg viewBox="0 0 880 380" role="img" aria-label="Auto-apply state machine showing the LinkedIn multi-step wizard path and the Naukri single-click path, with dry run stopping before any irreversible action.">
+          <defs>
+            <marker id="jf-a4" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="currentColor"/>
+            </marker>
+            <marker id="jf-a4r" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="#93362F"/>
+            </marker>
+          </defs>
+
+          <text x="24" y="24" font-family="IBM Plex Mono, monospace" font-size="11" fill="currentColor" letter-spacing="1.2">LINKEDIN — MULTI-STEP WIZARD, NOTHING SENT UNTIL SUBMIT</text>
+
+          <rect x="24" y="38" width="118" height="42" rx="3" fill="none" stroke="currentColor" stroke-width="1"/>
+          <text x="83" y="57" font-size="12" text-anchor="middle" fill="currentColor">open posting</text>
+          <text x="83" y="72" font-size="10.5" text-anchor="middle" fill="currentColor" opacity=".7">is it Easy Apply?</text>
+
+          <line x1="142" y1="59" x2="176" y2="59" stroke="currentColor" stroke-width="1.2" marker-end="url(#jf-a4)"/>
+          <rect x="178" y="38" width="118" height="42" rx="3" fill="none" stroke="currentColor" stroke-width="1"/>
+          <text x="237" y="57" font-size="12" text-anchor="middle" fill="currentColor">follow apply href</text>
+          <text x="237" y="72" font-size="10.5" text-anchor="middle" fill="currentColor" opacity=".7">not click</text>
+
+          <line x1="296" y1="59" x2="330" y2="59" stroke="currentColor" stroke-width="1.2" marker-end="url(#jf-a4)"/>
+          <rect x="332" y="30" width="170" height="58" rx="3" fill="none" stroke="currentColor" stroke-width="1.4"/>
+          <text x="417" y="50" font-size="12.5" text-anchor="middle" fill="currentColor">scan → fill · ×4 passes</text>
+          <text x="417" y="66" font-size="10.5" text-anchor="middle" fill="currentColor" opacity=".72">conditional fields appear</text>
+          <text x="417" y="80" font-size="10.5" text-anchor="middle" fill="currentColor" opacity=".72">only after the first answer</text>
+
+          <line x1="502" y1="59" x2="536" y2="59" stroke="currentColor" stroke-width="1.2" marker-end="url(#jf-a4)"/>
+          <rect x="538" y="38" width="130" height="42" rx="3" fill="none" stroke="currentColor" stroke-width="1"/>
+          <text x="603" y="57" font-size="12" text-anchor="middle" fill="currentColor">press Next</text>
+          <text x="603" y="72" font-size="10.5" text-anchor="middle" fill="currentColor" opacity=".7">signature changed?</text>
+
+          <!-- loop back -->
+          <path d="M 603 38 L 603 16 L 417 16 L 417 28" fill="none" stroke="currentColor" stroke-width="1.2" marker-end="url(#jf-a4)"/>
+          <text x="510" y="12" font-size="10.5" text-anchor="middle" fill="currentColor" opacity=".8">yes — next step (max 12)</text>
+
+          <!-- refused -->
+          <line x1="603" y1="80" x2="603" y2="108" stroke="#93362F" stroke-width="1.3" marker-end="url(#jf-a4r)"/>
+          <text x="614" y="98" font-size="11" fill="currentColor">no — the form refused</text>
+          <rect x="470" y="110" width="266" height="52" rx="3" fill="none" stroke="#93362F" stroke-width="1.2"/>
+          <text x="603" y="129" font-size="12" text-anchor="middle" fill="currentColor">ask the form why</text>
+          <text x="603" y="145" font-size="10.5" text-anchor="middle" fill="currentColor" opacity=".75">aria-invalid + aria-describedby → park</text>
+          <text x="603" y="157" font-size="10.5" text-anchor="middle" fill="currentColor" opacity=".75">the real question, with its options</text>
+
+          <!-- submit -->
+          <line x1="668" y1="59" x2="702" y2="59" stroke="currentColor" stroke-width="1.2" marker-end="url(#jf-a4)"/>
+          <rect x="704" y="38" width="152" height="42" rx="3" fill="none" stroke="currentColor" stroke-width="1.4"/>
+          <text x="780" y="57" font-size="12" text-anchor="middle" fill="currentColor">Submit is offered</text>
+          <text x="780" y="72" font-size="10.5" text-anchor="middle" fill="currentColor" opacity=".7">screenshot taken</text>
+
+          <line x1="780" y1="80" x2="780" y2="180" stroke="currentColor" stroke-width="1.2" marker-end="url(#jf-a4)"/>
+          <rect x="700" y="182" width="160" height="46" rx="3" fill="none" stroke="currentColor" stroke-width="1.2" stroke-dasharray="5 3"/>
+          <text x="780" y="201" font-size="12" text-anchor="middle" fill="currentColor">armed?</text>
+          <text x="780" y="217" font-size="10.5" text-anchor="middle" fill="currentColor" opacity=".7">never remembered</text>
+
+          <!-- naukri -->
+          <line x1="24" y1="252" x2="856" y2="252" stroke="currentColor" stroke-width="1" opacity=".3"/>
+          <text x="24" y="278" font-family="IBM Plex Mono, monospace" font-size="11" fill="currentColor" letter-spacing="1.2">NAUKRI — THE CLICK IS THE SUBMISSION</text>
+
+          <rect x="24" y="292" width="140" height="42" rx="3" fill="none" stroke="currentColor" stroke-width="1"/>
+          <text x="94" y="311" font-size="12" text-anchor="middle" fill="currentColor">open posting</text>
+          <text x="94" y="326" font-size="10.5" text-anchor="middle" fill="currentColor" opacity=".7">read button id</text>
+
+          <line x1="164" y1="313" x2="198" y2="313" stroke="currentColor" stroke-width="1.2" marker-end="url(#jf-a4)"/>
+          <rect x="200" y="284" width="200" height="26" rx="3" fill="none" stroke="currentColor" stroke-width="1"/>
+          <text x="300" y="301" font-size="11.5" text-anchor="middle" fill="currentColor"><tspan font-family="IBM Plex Mono, monospace" font-size="10.5">#company-site-button</tspan> → skip</text>
+          <rect x="200" y="316" width="200" height="26" rx="3" fill="none" stroke="currentColor" stroke-width="1"/>
+          <text x="300" y="333" font-size="11.5" text-anchor="middle" fill="currentColor"><tspan font-family="IBM Plex Mono, monospace" font-size="10.5">#apply-button</tspan> → applies here</text>
+
+          <line x1="400" y1="329" x2="434" y2="329" stroke="#93362F" stroke-width="1.4" marker-end="url(#jf-a4r)"/>
+          <rect x="436" y="300" width="230" height="58" rx="3" fill="#93362F" fill-opacity=".07" stroke="#93362F" stroke-width="1.4"/>
+          <text x="551" y="320" font-size="12.5" text-anchor="middle" fill="currentColor" font-weight="600">a dry run does not click</text>
+          <text x="551" y="336" font-size="10.5" text-anchor="middle" fill="currentColor" opacity=".8">there is no review step to stop at;</text>
+          <text x="551" y="349" font-size="10.5" text-anchor="middle" fill="currentColor" opacity=".8">the chatbot's questions come after you are in</text>
+
+          <line x1="666" y1="329" x2="700" y2="329" stroke="currentColor" stroke-width="1.2" marker-end="url(#jf-a4)"/>
+          <rect x="702" y="308" width="154" height="42" rx="3" fill="none" stroke="currentColor" stroke-width="1"/>
+          <text x="779" y="327" font-size="12" text-anchor="middle" fill="currentColor">screenshot + report</text>
+          <text x="779" y="342" font-size="10.5" text-anchor="middle" fill="currentColor" opacity=".7">what it would have done</text>
+        </svg>
+        <figcaption><b>The asymmetry is the whole design.</b> LinkedIn's wizard can be walked, inspected and backed out of, so a dry run fills everything and stops at Submit. Naukri's apply button <em>is</em> the submission, so a dry run must not click at all. Early-access roles ("Share Interest") are treated with the same care as a submission, because they are equally irreversible.</figcaption>
+      </figure>
+
+      <h3>Reading refusal, because the site will not tell you</h3>
+
+      <p>LinkedIn does not report that it refused to advance. If a required field is empty it simply does nothing when Next is pressed — same dialog, same percentage, no visible error. So the engine fingerprints the step (<code>stepSignature</code>: the progress percentage plus the ordered list of field ids/names/types) before and after the click. An unchanged signature <em>is</em> the refusal signal.</p>
+
+      <p>Two things follow from that. First, LinkedIn frequently omits <code>required</code> and <code>aria-required</code> on its custom widgets, so a field looked optional and got skipped — the refusal is the requirement signal, and anything still unanswered on that step is parked rather than skipped. Second, if <em>everything</em> is answered, the engine asks the form what it objects to by walking <code>aria-invalid</code> and <code>aria-describedby</code>. That distinguishes the two cases which look identical from outside: a field left empty, and a field filled with something the site rejects.</p>
+
+      <h3>Filling that confirms it took</h3>
+
+      <p>Writing <code>.value</code> is enough for an ordinary input and wrong for three widget classes:</p>
+
+      <ul>
+        <li><strong>Typeaheads.</strong> LinkedIn's "Location (city)" keeps its real answer in React state, which only updates from genuine keystrokes plus a chosen suggestion. Write to it directly and the box shows your text while the form still considers it empty — so Next does nothing, forever, with no error. The engine types with <code>pressSequentially</code> at 90&nbsp;ms per character and then clicks a <code>[role="option"]</code>.</li>
+        <li><strong>Selects.</strong> React-controlled dropdowns ignore a synthetic <code>change</code>: the box shows the new label while React's state stays on the placeholder. Playwright's <code>selectOption</code> drives it the way a person does.</li>
+        <li><strong>Verification.</strong> A <code>&lt;select&gt;</code> is confirmed by its <em>selected option's text</em>, not by <code>.value</code> — LinkedIn's option values are URNs while the visible text is "1 year", so comparing <code>.value</code> to what was asked reports failure on a dropdown that is set perfectly well, and the run then blames a field that is fine.</li>
+      </ul>
+
+      <p>Every DOM read goes through <code>safeEval</code>, which swallows "Execution context was destroyed". Clicking Next or Submit tears the context down under any evaluate in flight; these reads are all best-effort by nature, so a destroyed context means "could not do it", not "abort the application".</p>
+
+      <h3>Batch composition</h3>
+
+      <p>A batch drawn purely by freshness ends up wherever the boards happened to be busy that morning, which is usually all one place. The mix is set deliberately instead: <strong>50% home, 30% worldwide, 20% remote</strong>, with quotas allocated by largest-remainder so the total always sums to the limit exactly rather than drifting a job short on odd numbers. Places a thin bucket cannot use are backfilled in priority order — <em>remote first, then home, then worldwide</em> — because Naukri's worldwide bucket is almost always short and those places are better spent on remote roles than on more local ones.</p>
+
+      <p>Bucketing puts remote ahead of geography on purpose: "Bengaluru (Remote)" is a remote job that happens to name a city, and treating it as domestic would let the home bucket swallow the remote quota.</p>
+
+      <h3>Ordering: day buckets, then fit</h3>
+
+      <div class="note measured">
+        <span class="note-k">Measured</span>
+        <p>Ordering by <code>fit_score</code> alone put a high-scoring 87-day-old Naukri listing ahead of a job scanned that morning. On a real ten-job batch ordered that way: <strong>8 expired, 1 already applied, 1 external, 0 actually applied.</strong> The whole budget went on dead postings.</p>
+        <p>The fix is to sort by <em>age in whole days first</em>, then fit within the same day. Sorting by fit across the whole window has the same failure in miniature, because fresh postings usually have no fit score yet — scoring runs later — so they sort as 0 and land behind three-week-old scored ones.</p>
+      </div>
+
+      <h3>Slot accounting: a batch of ten means ten real attempts</h3>
+
+      <p>The naive loop consumed one candidate per slot, so a batch of ten could finish having applied to nothing — every place taken by a posting that turned out to redirect to the employer, or to have expired. Those cost a few seconds and teach something permanent (<code>apply_kind</code> is recorded), so they must not count.</p>
+
+      <p>Each worker therefore <em>claims</em> a place before opening a posting and <em>hands it back</em> if the outcome was not a real attempt. Reserving up front matters too: without it, every worker sees <code>usable &lt; limit</code> at the same moment and they all start one more, so a limit of 10 quietly becomes 12.</p>
+
+      <div class="table-wrap">
+        <table>
+          <caption>Outcome classes and what each one costs.</caption>
+          <thead><tr><th>Outcome</th><th>Consumes a slot?</th><th>Counts against retries?</th><th>Rationale</th></tr></thead>
+          <tbody>
+            <tr><td><code>applied</code>, <code>dry_run</code>, <code>error</code>, <code>applied_incomplete</code></td><td>Yes</td><td>Only <code>error</code></td><td>We opened a form and worked on it</td></tr>
+            <tr><td><code>needs_input</code></td><td>Yes</td><td><strong>No</strong></td><td>Waiting on the user is not a failure. Counting it threw away two good applications after three passes purely because nobody had typed an answer.</td></tr>
+            <tr><td><code>external</code>, <code>expired</code>, <code>already_applied</code></td><td>No</td><td>No</td><td>Decided in seconds without opening a form; <code>apply_kind</code> learned permanently</td></tr>
+            <tr><td>Transient (<code>ERR_HTTP_RESPONSE_CODE_FAILURE</code>, <code>429</code>, timeouts)</td><td>No</td><td>No</td><td>The site refused <em>us</em>. The job is left completely unrecorded and still eligible, so a rate-limited afternoon cannot permanently discard good postings.</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <p>After three usable attempts still ending in <code>error</code>, a posting is <code>abandoned</code>. That is per <em>posting</em>, never per role: a reposted opening is a different row with its own <code>external_id</code> and its own counter, so giving up on today's broken form does not stop an application when the same employer posts it again next month.</p>
+
+      <h3>Parallel across boards, serial within one</h3>
+
+      <p>LinkedIn and Naukri are unrelated servers with unrelated rate limits, so running both at once is free speed — the run takes as long as the slower board rather than the sum. Firing ten applications at the <em>same</em> board simultaneously is not free: it is the clearest automation signal either site gets, and the penalty is a restricted account, which costs the logged-in session everything else here depends on.</p>
+
+      <p>So an armed run is one-at-a-time per board with a randomised 12–30&nbsp;second gap between submissions. A dry run submits nothing, so it opens a few tabs at once — but not the same number for both boards: three concurrent LinkedIn tabs produced <code>ERR_HTTP_RESPONSE_CODE_FAILURE</code> on half a batch, so <code>DRY_WIDTH</code> is <code>{ linkedin: 2, naukri: 3 }</code>.</p>
+
+      <h3>Not reopening jobs that cannot progress</h3>
+
+      <p>A job parked on an unanswered question is not worth reopening: the run would walk the same wizard, hit the same blank field, park it again, and spend a slot to learn nothing. So eligibility joins <code>jobs.auto_apply_blocked_on</code> against the set of keys currently at <code>needs_input</code> and excludes anything still waiting. The job returns automatically the moment the question is answered — which is the entire point of keying questions by <code>field_key</code>.</p>
+    </section>
+
+    <!-- ═══════════════════════════════════════════════════ 10 -->
+    <section id="s10">
+      <span class="sec-num">Section 10</span>
+      <h2>Answers that are computed, not stored</h2>
+
+      <p>Two classes of question have a correct answer that a stored string gets wrong. These are the only cases where auto-apply fills a field without a human having typed that exact value — and in both, the user supplied the underlying fact and the system is only doing arithmetic.</p>
+
+      <h3>Notice period</h3>
+
+      <p>If your last working day is fixed, the honest answer shrinks by one every morning. Storing "45 days" makes it wrong tomorrow and badly wrong in six weeks — and wrong in the direction that matters, because a recruiter plans around the date you gave them. So the source of truth is the <em>date</em>, entered once, and the number is derived at the moment a form asks.</p>
+
+      <p>The interesting part is dropdowns. Forms express notice as buckets — "Immediate", "15 days", "1 month", "60-90 days", "More than 90 days" — and <code>matchNoticeOption()</code> parses each label into a <code>[lo, hi]</code> day range, then:</p>
+
+      <ol>
+        <li>An exact containing bucket wins.</li>
+        <li>Otherwise, the <strong>smallest option still greater than or equal to</strong> the real figure. Rounding <em>up</em> is deliberate: telling an employer you can start sooner than you can is the error that costs you the offer.</li>
+        <li>If every option on offer is shorter than the truth, it returns <code>null</code> and falls through to the ordinary bank — say nothing rather than something false.</li>
+      </ol>
+
+      <div class="note danger">
+        <span class="note-k">One regex, six weeks of wrong answers</span>
+        <p>The "Immediate" pattern needs <code>\b0\s*days?\b</code>, not <code>0\s*days?</code>. Without the word boundary, <code>"0 day"</code> matches the tail of <code>"3-0- days"</code> — so <em>"30 days"</em>, <em>"60 days"</em> and <em>"31-60 days"</em> all parsed as Immediate, and a 45-day notice period would have been reported to employers as "available now". <code>scripts/test-notice-period.mjs</code> exists specifically to guard this arithmetic.</p>
+      </div>
+
+      <h3>Salary expectation, converted by purchasing power</h3>
+
+      <p>Your figure is one number in one currency. A form in Berlin wants euros, one in Dubai wants dirhams, and typing <code>3000000</code> into either is a number so wrong it reads as a mistake rather than an ask. But <em>which</em> conversion you use changes the answer enormously, and both are defensible:</p>
+
+      <div class="table-wrap">
+        <table>
+          <caption>₹30,00,000 expressed for a US employer, two ways. The difference is a factor of 3.6.</caption>
+          <thead><tr><th>Basis</th><th>What it answers</th><th class="num">Result</th><th>Consequence</th></tr></thead>
+          <tbody>
+            <tr><td>Market exchange rate</td><td>What your money is worth if you exchange it</td><td class="num">≈ $36,000</td><td>Nobody in the US is hired at that. Underprices you threefold, and it is very hard to walk back.</td></tr>
+            <tr><td><strong>Purchasing power (PPP)</strong></td><td>What it takes to live the same way there as here</td><td class="num"><strong>≈ $130,000</strong></td><td>The honest basis for "what would I need to move" — which is what the question is really asking.</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <p>The conversion is <code>base ÷ PPP[home] × PPP[target]</code>, with factors from World Bank ICP (LCU per international dollar, 2024), rounded to something a person would actually type — roughly three significant figures on a magnitude-appropriate step, with a coarser step for JPY, KRW, IDR and VND. Both figures are logged every time, so the number is never a black box, and <em>a currency-specific answer you set yourself always wins</em> — an <code>expected salary usd</code> row in the bank beats anything computed.</p>
+
+      <p>Currency detection is ordered by strength of evidence: a currency code in the field label, then a currency symbol, then "lakh"/"LPA", then the job's country. A bare <code>$</code> resolves to <em>nothing</em> — it could be four different currencies, and the difference between USD and SGD is a third of the number. When no currency can be identified the field is not guessed at; it is parked as a question that names the problem: <em>"Expected CTC — which currency? the form does not say which currency it wants, and the job does not name a country."</em></p>
+
+      <div class="note">
+        <span class="note-k">Design note</span>
+        <p>The PPP and FX tables are hard-coded, not fetched. A local-first app should not depend on a currency API to fill a form, and PPP moves slowly enough that a stale table is a rounding error rather than a wrong answer. FX is carried purely so the log can show the contrast; it is never the basis for what gets typed.</p>
+      </div>
+    </section>
+
+    <!-- ═══════════════════════════════════════════════════ 11 -->
+    <section id="s11">
+      <span class="sec-num">Section 11</span>
+      <h2>Anti-detection and the lazy-attach model</h2>
+
+      <p>Commercial bot detection scores two things: what the JavaScript environment looks like, and whether an automation client is currently driving the page. The stealth script addresses the first. Lazy attach addresses the second, and is the more interesting idea.</p>
+
+      <h3>Lazy attach</h3>
+
+      <p>Chrome does not set <code>navigator.webdriver = true</code> because a debugging port is open. It sets it when a CDP client actively issues <code>Runtime.enable</code>. And page JavaScript cannot probe <code>localhost:&lt;port&gt;</code> across origins. So a Chrome running with <code>--remote-debugging-port</code> and <strong>no client connected</strong> is fingerprint-identical to plain Chrome.</p>
+
+      <figure>
+        <svg viewBox="0 0 880 250" role="img" aria-label="Timeline showing Chrome running continuously while Playwright attaches only briefly during autofill, leaving the verification step running against an unattached browser.">
+          <defs>
+            <marker id="jf-a5" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="currentColor"/>
+            </marker>
+          </defs>
+
+          <!-- chrome lifeline -->
+          <text x="24" y="52" font-size="12.5" fill="currentColor">Chrome process</text>
+          <text x="24" y="68" font-size="10.5" fill="currentColor" opacity=".7">debug port open</text>
+          <rect x="176" y="38" width="672" height="26" rx="3" fill="#2F6B4F" fill-opacity=".14" stroke="#2F6B4F" stroke-width="1"/>
+          <text x="512" y="56" font-size="11.5" text-anchor="middle" fill="currentColor">alive throughout — cookies, history and session persist in the user-data-dir</text>
+
+          <!-- playwright lifeline -->
+          <text x="24" y="118" font-size="12.5" fill="currentColor">Playwright client</text>
+          <text x="24" y="134" font-size="10.5" fill="currentColor" opacity=".7">connectOverCDP</text>
+          <line x1="176" y1="116" x2="848" y2="116" stroke="currentColor" stroke-width="1" stroke-dasharray="3 4" opacity=".5"/>
+          <rect x="272" y="104" width="86" height="24" rx="3" fill="currentColor" fill-opacity=".16" stroke="currentColor" stroke-width="1"/>
+          <text x="315" y="121" font-size="11" text-anchor="middle" fill="currentColor">attached</text>
+          <rect x="470" y="104" width="70" height="24" rx="3" fill="currentColor" fill-opacity=".16" stroke="currentColor" stroke-width="1"/>
+          <text x="505" y="121" font-size="11" text-anchor="middle" fill="currentColor">attached</text>
+
+          <!-- events -->
+          <line x1="315" y1="88" x2="315" y2="102" stroke="currentColor" stroke-width="1" marker-end="url(#jf-a5)"/>
+          <text x="315" y="82" font-size="11" text-anchor="middle" fill="currentColor">Autofill pressed</text>
+          <line x1="505" y1="88" x2="505" y2="102" stroke="currentColor" stroke-width="1" marker-end="url(#jf-a5)"/>
+          <text x="505" y="82" font-size="11" text-anchor="middle" fill="currentColor">next page filled</text>
+
+          <!-- verification band -->
+          <rect x="560" y="150" width="288" height="52" rx="3" fill="none" stroke="#2F6B4F" stroke-width="1.4"/>
+          <text x="704" y="170" font-size="12.5" text-anchor="middle" fill="currentColor" font-weight="600">verification &amp; Submit</text>
+          <text x="704" y="186" font-size="10.5" text-anchor="middle" fill="currentColor" opacity=".8">no client attached · no init scripts on new</text>
+          <text x="704" y="198" font-size="10.5" text-anchor="middle" fill="currentColor" opacity=".8">navigations · nothing for a detector to find</text>
+          <line x1="704" y1="128" x2="704" y2="148" stroke="#2F6B4F" stroke-width="1.4" marker-end="url(#jf-arrow-a)"/>
+
+          <text x="176" y="228" font-size="11.5" fill="currentColor" opacity=".8">Meanwhile the injected observer keeps recording to localStorage with zero automation present, and the next attach drains it.</text>
+          <line x1="176" y1="212" x2="176" y2="30" stroke="currentColor" stroke-width="1" opacity=".25"/>
+          <line x1="848" y1="212" x2="848" y2="30" stroke="currentColor" stroke-width="1" opacity=".25"/>
+        </svg>
+        <figcaption><b>The window you get verified in has nothing attached to it.</b> <code>withAttachedContext()</code> connects over CDP, re-injects the stealth and observer scripts into already-open frames (both are idempotent IIFEs), runs the callback, and disconnects — leaving Chrome alive. Pages loaded between attaches receive no init scripts at all, which is precisely what you want for the human-verification step that follows an autofill.</figcaption>
+      </figure>
+
+      <p>Because the in-memory port map is lost whenever Next.js restarts the server process — which it does on almost any edit — while <em>your Chrome keeps running</em>, the debug port is also written to disk (<code>.jobfinder-cdp.json</code>) and rediscovered. Without that, a scan would skip the reuse branch, delete the live Chrome's <code>SingletonLock</code>, spawn a second Chrome that immediately hands off and exits, time out waiting for CDP, and silently fall back to bundled Chromium with none of your cookies. That is the exact chain that made LinkedIn and Naukri behave as though you were logged out while your real Chrome held valid session cookies the whole time.</p>
+
+      <h3>Two user-data-dirs, on purpose</h3>
+
+      <p>Chrome allows exactly one process per user-data-dir. If a background scan held the main directory, clicking "Open &amp; log in" mid-scan would find that process and hand your login window to a <em>headless</em> browser — you would click the button and nothing would ever appear. Scans therefore run in their own directory, seeded with a copy of your cookies, re-synced (throttled to once a minute) so a sign-in you complete after the scan started still reaches it.</p>
+
+      <h3>The stealth script</h3>
+
+      <p>Eight categories, injected as an init script. The first is the one the rest depend on:</p>
+
+      <ol>
+        <li><strong>Native-code masking.</strong> Every patched property replaces a native getter with a JS function, and detectors read <code>Object.getOwnPropertyDescriptor(navigator,'webdriver').get.toString()</code>. Real Chrome returns <code>"function get webdriver() { [native code] }"</code>; an unmasked patch returns <code>"() =&gt; undefined"</code> — an instant, unambiguous flag. A Proxy over <code>Function.prototype.toString</code> returns a native-looking string for registered functions, and registers <em>itself</em>, so <code>toString.toString()</code> also looks native.</li>
+        <li><strong><code>navigator.webdriver</code> — patched, not deleted.</strong> Real non-automated Chrome <em>has</em> the property and returns <code>false</code>, so <code>('webdriver' in navigator)</code> is true. Deleting it makes that check false, which no real Chrome ever does: deleting swaps one bot signal for a different one.</li>
+        <li><strong>Plugins and mimeTypes — built once and cached.</strong> An earlier implementation rebuilt the <code>PluginArray</code> on every access, so <code>navigator.plugins[0] === navigator.plugins[0]</code> evaluated to <code>false</code> — impossible in a real browser and trivially detectable.</li>
+        <li><strong>Locale and hardware consistency</strong>, because 0 cores or a Linux platform under a Mac UA is a mismatch.</li>
+        <li><strong><code>window.chrome</code></strong> with plausible <code>app</code>, <code>csi</code>, <code>loadTimes</code> and <code>runtime</code> surfaces.</li>
+        <li><strong><code>Permissions.query</code></strong>, because headless Chrome famously returns <code>'denied'</code> for notifications while <code>Notification.permission</code> says <code>'default'</code> — a contradiction that is a well-known tell.</li>
+        <li><strong>WebGL vendor/renderer</strong>, because software-rendered Chrome reports "Google SwiftShader" or "Mesa OffScreen".</li>
+        <li><strong>Scrubbing CDC and driver artifacts</strong> that leak onto <code>window</code>.</li>
+      </ol>
+
+      <p><code>scripts/test-stealth.mjs</code> asserts 23 fingerprint probes.</p>
+
+      <div class="note measured">
+        <span class="note-k">Measured</span>
+        <p>Two headless defaults nobody overrode mattered more than any of the above. Same stealth script, headless versus headful: the user agent read <code>...HeadlessChrome/151...</code> instead of <code>...Chrome/151...</code>, and <code>screen</code> was 800×600 instead of 1280×960. With those uncorrected, Naukri's Akamai returned "Access Denied" and Reddit returned zero posts, while the identical code in a visible window got 24 and 10. The real user agent is now read from the installed browser's own <code>--version</code> output.</p>
+      </div>
+
+      <h3>Safe mode</h3>
+
+      <p>If a human-verification check starts escalating, Safe Mode snapshots every open tab's URL, closes the automated context (cookies flush to disk), launches a brand-new Chrome on the <em>same</em> user-data-dir with no debugging port and no init scripts, and reopens the tabs. Logins, cookies and any <code>cf_clearance</code> carry over because they live in the directory, not the process. There is literally nothing to detect because nothing is attached.</p>
+    </section>
+
+    <!-- ═══════════════════════════════════════════════════ 12 -->
+    <section id="s12">
+      <span class="sec-num">Section 12</span>
+      <h2>Interview prep: from evidence to notes</h2>
+
+      <p>The prep engine's constraint is that it may not invent study topics. Every topic on the list must trace back to a verbatim sentence in a job description the user actually saved.</p>
+
+      <figure>
+        <svg viewBox="0 0 880 300" role="img" aria-label="Interview prep pipeline: saved job descriptions yield dictionary skill matches and discovered candidate terms; candidates are validated against Stack Overflow and Wikipedia; surviving skills are researched, synthesised into notes, and chunked into an embedded knowledge base.">
+          <defs>
+            <marker id="jf-a6" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="currentColor"/>
+            </marker>
+          </defs>
+
+          <rect x="20" y="112" width="118" height="56" rx="3" fill="none" stroke="currentColor" stroke-width="1.2"/>
+          <text x="79" y="134" font-size="12.5" text-anchor="middle" fill="currentColor">20 saved JDs</text>
+          <text x="79" y="150" font-size="10.5" text-anchor="middle" fill="currentColor" opacity=".72">newest first,</text>
+          <text x="79" y="162" font-size="10.5" text-anchor="middle" fill="currentColor" opacity=".72">9k chars each</text>
+
+          <line x1="138" y1="126" x2="174" y2="76" stroke="currentColor" stroke-width="1.2" marker-end="url(#jf-a6)"/>
+          <line x1="138" y1="154" x2="174" y2="204" stroke="currentColor" stroke-width="1.2" marker-end="url(#jf-a6)"/>
+
+          <rect x="176" y="48" width="152" height="56" rx="3" fill="none" stroke="currentColor" stroke-width="1.2"/>
+          <text x="252" y="70" font-size="12.5" text-anchor="middle" fill="currentColor">curated dictionary</text>
+          <text x="252" y="86" font-size="10.5" text-anchor="middle" fill="currentColor" opacity=".72">word-boundary regex,</text>
+          <text x="252" y="98" font-size="10.5" text-anchor="middle" fill="currentColor" opacity=".72">aliases ≥ 2 chars</text>
+
+          <rect x="176" y="176" width="152" height="56" rx="3" fill="none" stroke="currentColor" stroke-width="1.2" stroke-dasharray="5 3"/>
+          <text x="252" y="198" font-size="12.5" text-anchor="middle" fill="currentColor">unknown candidates</text>
+          <text x="252" y="214" font-size="10.5" text-anchor="middle" fill="currentColor" opacity=".72">CamelCase / ALLCAPS,</text>
+          <text x="252" y="226" font-size="10.5" text-anchor="middle" fill="currentColor" opacity=".72">seen mid-sentence</text>
+
+          <line x1="328" y1="204" x2="366" y2="204" stroke="currentColor" stroke-width="1.2" marker-end="url(#jf-a6)"/>
+          <rect x="368" y="164" width="152" height="80" rx="3" fill="#9A6410" fill-opacity=".08" stroke="#9A6410" stroke-width="1.2"/>
+          <text x="444" y="186" font-size="12.5" text-anchor="middle" fill="currentColor" font-weight="600">external validation</text>
+          <text x="444" y="203" font-size="10.5" text-anchor="middle" fill="currentColor" opacity=".8">Stack Overflow tag ≥ 100 Q</text>
+          <text x="444" y="216" font-size="10.5" text-anchor="middle" fill="currentColor" opacity=".8">+ Wikipedia tech article</text>
+          <text x="444" y="232" font-size="10.5" text-anchor="middle" fill="currentColor" opacity=".8">≥ 3 chars · cached 30 days</text>
+
+          <line x1="520" y1="190" x2="558" y2="150" stroke="currentColor" stroke-width="1.2" marker-end="url(#jf-a6)"/>
+          <line x1="328" y1="76" x2="558" y2="120" stroke="currentColor" stroke-width="1.2" marker-end="url(#jf-a6)"/>
+
+          <rect x="560" y="106" width="140" height="56" rx="3" fill="none" stroke="currentColor" stroke-width="1.4"/>
+          <text x="630" y="128" font-size="12.5" text-anchor="middle" fill="currentColor">ranked skills</text>
+          <text x="630" y="144" font-size="10.5" text-anchor="middle" fill="currentColor" opacity=".72">by ad count, with</text>
+          <text x="630" y="156" font-size="10.5" text-anchor="middle" fill="currentColor" opacity=".72">evidence sentence</text>
+
+          <line x1="700" y1="134" x2="736" y2="134" stroke="currentColor" stroke-width="1.2" marker-end="url(#jf-a6)"/>
+          <rect x="738" y="82" width="122" height="46" rx="3" fill="none" stroke="currentColor" stroke-width="1"/>
+          <text x="799" y="101" font-size="12" text-anchor="middle" fill="currentColor">research</text>
+          <text x="799" y="116" font-size="10.5" text-anchor="middle" fill="currentColor" opacity=".72">docs · SO · HN · dev.to</text>
+
+          <rect x="738" y="140" width="122" height="46" rx="3" fill="none" stroke="currentColor" stroke-width="1"/>
+          <text x="799" y="159" font-size="12" text-anchor="middle" fill="currentColor">synthesise</text>
+          <text x="799" y="174" font-size="10.5" text-anchor="middle" fill="currentColor" opacity=".72">1 skill at a time</text>
+
+          <rect x="738" y="198" width="122" height="46" rx="3" fill="none" stroke="currentColor" stroke-width="1"/>
+          <text x="799" y="217" font-size="12" text-anchor="middle" fill="currentColor">chunk + embed</text>
+          <text x="799" y="232" font-size="10.5" text-anchor="middle" fill="currentColor" opacity=".72">900 / 150 overlap</text>
+          <line x1="799" y1="128" x2="799" y2="138" stroke="currentColor" stroke-width="1.1" marker-end="url(#jf-a6)"/>
+          <line x1="799" y1="186" x2="799" y2="196" stroke="currentColor" stroke-width="1.1" marker-end="url(#jf-a6)"/>
+
+          <text x="20" y="276" font-size="11.5" fill="currentColor" opacity=".8">Every note carries the JD sentence that put it on the list, how many of your saved jobs demand it, and a numbered reference list —</text>
+          <text x="20" y="292" font-size="11.5" fill="currentColor" opacity=".8">so the user can always check the system's work.</text>
+        </svg>
+        <figcaption><b>Two paths into the skill list, one validation gate.</b> The curated dictionary provides precision; discovery provides recall for tooling too new to be in it. Everything discovered has to be recognised by an outside authority before it can cost the user forty minutes of local generation.</figcaption>
+      </figure>
+
+      <h3>Why the dictionary is closed</h3>
+
+      <p>There is deliberately no "guess at unknown capitalised words" fallback. That fallback existed and was a disaster: German job ads capitalise every noun, so it produced study topics like <em>Du</em> (you), <em>Deine</em> (your), <em>Kunden</em> (customers), <em>Rolle</em> (role) and <em>Umsetzung</em> (implementation). An English stopword list cannot fix this, because the problem is unbounded — every language, every proper noun, every product name in every ad.</p>
+
+      <p>Precision beats recall here for an asymmetric-cost reason: a missed niche tool costs one topic; a garbage topic costs the user's trust and roughly five minutes of local LLM time. Broad fields are excluded too — "study AI" is not an actionable topic, "study RAG" is.</p>
+
+      <h3>The mid-sentence rule</h3>
+
+      <p>The structural defence against prose words entering the list is not a wordlist. It is this: <em>a term must appear capitalised at least once mid-sentence.</em> "The" and "This" are capitalised only at sentence start; real product names like "Weaviate" or "Kubernetes" also appear capitalised mid-sentence. Nothing else can cover this class — Stack Overflow genuinely has a <code>this</code> tag with 6,000+ questions (the JavaScript keyword), so external validation alone cannot reject it. A minimum length of three characters closes the other hole: every real two-character technology (Go, R, C) is already curated, while <code>du</code> is both a German pronoun and a Unix command with a real tag.</p>
+
+      <h3>Research has a relevance gate</h3>
+
+      <p>Blindly taking top API results meant a search for "Incident Response" returned "Android: Overlay on Android Camera Preview" from Stack Overflow. Every candidate must now mention the skill in its title. The gate splits a multi-word skill into a <em>primary distinctive term</em> and secondary tokens, and maintains a <code>GENERIC</code> set for the filler inside skill names — matching only "protocol" out of "Model Context Protocol" let "Why is HTTP2 a binary protocol?" through.</p>
+
+      <p>Each skill also leads with its <strong>official documentation</strong>, curated alongside the alias list, and sources are tagged by purpose — <em>learn here</em> versus <em>interview questions</em> versus <em>background discussion</em> — because random forum threads do not teach a topic.</p>
+
+      <h3>Synthesis runs one skill at a time</h3>
+
+      <p>Two concurrent generations against a single 8B model at <code>num_ctx: 8192</code> is what wedged a build: both connections open, model loaded, runner at 3.7% CPU, generating nothing, with no timeout to recover from. The GPU is the bottleneck anyway, so parallelism bought little and risked a stall. Sequential is slower on paper and finishes more often. A full refresh is roughly forty minutes on an 8B model, and each note is written as it completes rather than at the end.</p>
+
+      <h3>The prep KB is a separate index</h3>
+
+      <p>Notes are split into 900-character chunks with 150-character overlap, preferring paragraph or sentence boundaries when the break lands past the halfway mark. Re-synthesis deletes a note's chunks before re-indexing so stale material never lingers. The Q&amp;A bot answers strictly from retrieved chunks and says when the KB does not cover something, rather than free-associating — the 0.52 threshold discussed in <a href="#s6">§6</a> is what makes that refusal reliable.</p>
+
+      <p>The mock interview is deliberately <strong>stateless</strong>: the client holds the transcript and posts it back. No session table, no expiry, and the user can close the tab and resume later. Questions are drawn from the prep KB, so what is rehearsed is what the user's own saved ads actually demand.</p>
+    </section>
+
+    <!-- ═══════════════════════════════════════════════════ 13 -->
+    <section id="s13">
+      <span class="sec-num">Section 13</span>
+      <h2>The scheduler's four brakes</h2>
+
+      <p>The scheduler is the one thing in JobFinder that acts on its own, and when armed it sends real applications to real employers while nobody is watching. The failure that matters is "it ran all night", and four independent mechanisms exist to prevent it.</p>
+
+      <ol>
+        <li><strong>A daily cap counted from the database.</strong> <code>sentToday()</code> is a <code>COUNT(*)</code> over jobs with <code>auto_apply_state = 'applied'</code> since local midnight. A restart, a second window or a crash mid-run cannot reset it, because the number is derived rather than held in memory. The cap also clamps the current batch: <code>limit = min(limit, cap − sent)</code>, so no single batch can carry past it.</li>
+        <li><strong>One run at a time per profile.</strong> A batch that overruns its interval must not have a second one started on top of it, both driving the same browser.</li>
+        <li><strong>A timeout chain, not <code>setInterval</code>.</strong> A slow run delays the next one instead of stacking. The timer is re-armed <em>before</em> the run executes, so a thrown run cannot silently end the schedule, and it is <code>unref</code>ed so a scheduler is never the reason a server refuses to exit.</li>
+        <li><strong>Loud, explicit arming.</strong> Only the literal boolean <code>true</code> arms it. The schedule announces itself in the log on every server start, naming whether it will send for real — a background sender that starts quietly is exactly what you would want to have been told about.</li>
+      </ol>
+
+      <p>The schedule <em>is</em> persisted, armed state included — a deliberate exception to the rule that arming is never remembered, because a scheduler you must re-arm after every restart is not a scheduler. The daily cap is what makes that survivable. On boot, the first run is delayed by up to five minutes rather than fired immediately, so a server restarting a few times while you edit settings does not send a burst of applications, one per restart.</p>
+
+      <div class="note measured">
+        <span class="note-k">Why a scheduled run also scans</span>
+        <p>Applying without scanning empties the pool and then does nothing, which reads as "it can't find any new jobs" when the truth is that nothing went looking. Measured overnight: <strong>145 applications between 20:00 and 02:00</strong>, after which Naukri had three candidates left and every later run was a no-op. Scheduled runs now scan first — but at most hourly, because a LinkedIn scan walks four feeds and takes about 85 seconds, so scanning every 20 minutes would spend most of the schedule scanning. The scan is timestamped whether it succeeded or not, so a board that is refusing us is not retried every twenty minutes.</p>
+      </div>
+    </section>
+
+    <!-- ═══════════════════════════════════════════════════ 14 -->
+    <section id="s14">
+      <span class="sec-num">Section 14</span>
+      <h2>Pipeline, mail and contacts</h2>
+
+      <h3>Stages that cannot slide backwards</h3>
+
+      <p>Ten stages from <code>new</code> to <code>offer</code> / <code>rejected</code>. <code>shouldAdvance(current, next)</code> compares rank, so opening a job you already applied to does not knock it back to "in progress" and lose the applied date. The three terminal-retry stages (<code>rejected</code>, <code>skipped</code>, <code>error</code>) rank &minus;1 and sit outside the progression: reopening one is a deliberate retry, not a regression.</p>
+
+      <h3>Funnel diagnosis, deliberately conservative</h3>
+
+      <p>The conversion rates are the point of the tracker. With a near-zero reply rate the fix is the CV, not more applications — and that is a very different week's work. So <code>diagnose()</code> reads the numbers in plain language, and refuses to diagnose small samples: under ten applications it says so and asks for 15–20 before judging. Above that it distinguishes a volume problem (healthy response rate, too few applications) from a quality problem (zero or sub-5% response) from an interview-performance problem (converting to interviews but not offers, with at least three interviews to go on).</p>
+
+      <h3>Mail: narrow by construction</h3>
+
+      <p>The original design was paste-only, explicitly to avoid storing a credential in an app that already holds the CV, the answers and the browser sessions. Mailbox connection was added later under a constraint that preserves the spirit: <strong>every sync runs a search built from the user's own applied companies</strong>. Unrelated mail is never requested, downloaded or stored. OAuth uses the read-only <code>gmail.readonly</code> scope; an app password grants more than that, but the code only ever reads. Credentials live in <code>data/gmail.json</code> at mode 0600, gitignored and revocable.</p>
+
+      <p>Job matching is <em>lexical, not semantic</em> — looking for the company name in the text, which is reliable and instant. Ambiguity is returned rather than guessed at, because silently updating the wrong application is expensive. Classification is one LLM call per message and the verdict is stored, so re-syncing is cheap; the classifier extracts an <code>asks</code> array so the specific things HR wants are listed separately rather than buried in a paragraph.</p>
+
+      <h3>The contact directory</h3>
+
+      <p>Scope is deliberately narrow: <em>only text already fetched for a posting is read</em>. Nothing is crawled to find addresses, and no address is ever guessed from a name-and-domain pattern. An address gets in because the employer printed it in their own ad next to "send your CV to", which is an invitation to write to them.</p>
+
+      <div class="note measured">
+        <span class="note-k">Measured</span>
+        <p>Across <strong>1,232 saved postings, 2.4% contain an address</strong> — and 25 of the 29 come from Hacker News "Who is hiring" threads, where a contact line is the convention. This is a slow-filling, high-quality list rather than a bulk one, which is the right shape for outreach anyway.</p>
+      </div>
+
+      <p>Two categories are filtered out because both showed up in real data and both are useless — or rude — to cold-mail. <strong>Job seekers</strong>: Hacker News runs "Who wants to be hired?" alongside "Who is hiring?", and those posts carry the same shape, an address plus <em>"Location: … Remote: … Technologies: …"</em>. <strong>Bench-sales and staffing vendors</strong> pitching consultants ("available immediately for C2C", "bench consultants", "hotlist") are selling, not recruiting. The seeker pattern deliberately has <em>no</em> trailing <code>\b</code> on its alternation: an earlier version ended with one, which silently broke <code>resume:\s*http</code> — the character after "http" is "s", not a boundary — so every "Resume: https://…" line slipped through.</p>
+    </section>
+
+    <!-- ═══════════════════════════════════════════════════ 15 -->
+    <section id="s15">
+      <span class="sec-num">Section 15</span>
+      <h2>Packaging</h2>
+
+      <p><code>npm run build:desktop</code> produces a standalone application for macOS and Windows: a real window with Chromium and the Node runtime inside it, which installs the local model runtime on first launch. The recipient double-clicks; there is no terminal, no <code>npm install</code>, and no localhost URL to type.</p>
+
+      <p>Two structural verifiers guard the outputs — <code>npm run verify:desktop</code> runs 23 checks on the desktop packages, <code>verify:windows</code> runs 22 on the Windows bundle. These are structural, not functional: they assert that the files that must be present are present and correctly shaped, which is the class of packaging bug that only appears on someone else's machine.</p>
+
+      <p>The bundled Chromium is set as <code>JOBFINDER_BROWSER_FALLBACK</code>, never as <code>JOBFINDER_BROWSER_PATH</code>. Forcing it would discard the better option on every machine that has real Chrome installed, and a lived-in browser profile is worth more to bot-detection outcomes than anything the stealth script does.</p>
+    </section>
+
+    <!-- ═══════════════════════════════════════════════════ 16 -->
+    <section id="s16">
+      <span class="sec-num">Section 16</span>
+      <h2>Where the ML actually is</h2>
+
+      <p class="lede">JobFinder trains nothing. There is no model file, no fitted parameters and no learning loop. What it uses are two pretrained models — one embedding, one generative — plus rule systems that are frequently mistaken for models.</p>
+
+      <div class="table-wrap">
+        <table>
+          <caption>Every component that could plausibly be called "ML", what it actually is, and why that choice.</caption>
+          <thead><tr><th>Component</th><th>What it is</th><th>Why not something learned</th></tr></thead>
+          <tbody>
+            <tr>
+              <td><strong>Answer retrieval</strong></td>
+              <td><code>all-minilm</code> sentence embeddings (384-dim), cosine similarity, top-K with a threshold. A pretrained bi-encoder used zero-shot.</td>
+              <td>Nothing to train on: a personal answer bank has 35 rows, not 35,000. Zero-shot semantic similarity is exactly the right tool at that scale, and the only tuning needed was <em>choosing the encoder</em> and <em>setting the threshold</em> — both done by measurement (<a href="#s6">§6</a>).</td>
+            </tr>
+            <tr>
+              <td><strong>Prep Q&amp;A</strong></td>
+              <td>The same encoder over a separate chunk index — retrieval-augmented generation with a hard grounding rule.</td>
+              <td>Same reason, plus a hard requirement that answers cite the notes rather than the model's own priors.</td>
+            </tr>
+            <tr>
+              <td><strong>Answer drafting, cover letters, synthesis, classification</strong></td>
+              <td>A local instruct LLM (<code>qwen2.5:7b-instruct</code>) prompted with retrieved context. Constrained JSON decoding where structure matters.</td>
+              <td>Generation, not prediction. The model is used where the task is genuinely a writing task and refused where the task is a factual claim about the user.</td>
+            </tr>
+            <tr>
+              <td><strong>Fit scoring</strong></td>
+              <td>A hand-weighted linear rule model over four components. <em>Not</em> a classifier.</td>
+              <td>Three reasons: no labels (nobody annotates "was this a good job for me"), a hard latency requirement (hundreds of jobs, sub-second, on CPU), and an explainability requirement — the user has to be able to read <em>why</em> a job scored 72 and disagree with it.</td>
+            </tr>
+            <tr>
+              <td><strong>Skill extraction</strong></td>
+              <td>A curated dictionary of regexes plus an external-authority validator (Stack Overflow tags, Wikipedia).</td>
+              <td>A learned NER model would be the textbook answer and would produce exactly the German-noun failure the dictionary was written to avoid. The validator is a cheap, auditable substitute for a model with a confidence score nobody could interpret.</td>
+            </tr>
+            <tr>
+              <td><strong>CV variant selection</strong></td>
+              <td>Deterministic set coverage — the variant whose extracted text matches the most of the posting's required skills wins.</td>
+              <td>Picking a file must be instant and reproducible, and the user has to be able to see why it chose what it chose. The log prints the winner's coverage percentage and every runner-up's.</td>
+            </tr>
+            <tr>
+              <td><strong>Salary and notice period</strong></td>
+              <td>Arithmetic over published constants (World Bank PPP) and calendar dates.</td>
+              <td>These have correct answers. Estimating them would be strictly worse than computing them.</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3>The through-line</h3>
+
+      <p>The pattern across all seven rows is the same test, applied consistently: <strong>is the output a claim about the world, or a piece of writing?</strong> Writing goes to the model. Claims — how many years of experience you have, what your notice period is, which currency the form wants, whether a term is a real technology — go to something deterministic, auditable, or to the user.</p>
+
+      <p>The one place that test is enforced at runtime rather than at design time is the <code>[BLANK]</code> sentinel: the short-field prompt instructs the model to return the literal string <code>[BLANK]</code> rather than invent a phone number, address, salary, visa status, date or employer name, and the caller treats that string as "leave it empty". It is a small mechanism carrying a large policy — and in auto-apply, where the stakes are highest, the model is not given the opportunity at all.</p>
+    </section>
+
+    <footer class="footer">
+      <p>Generated from the JobFinder source tree — <code>lib/</code>, <code>connectors/</code>, <code>app/api/</code>, <code>desktop/</code>. Measured figures quoted throughout are those recorded in the source comments at the time each decision was made. MIT licensed; respect each site's terms of service.</p>
+    </footer>
+
+  </article>
+</div>
