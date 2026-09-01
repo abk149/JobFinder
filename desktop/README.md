@@ -14,9 +14,23 @@ Output:
 
 ```
 desktop/dist/mac/JobFinder.app         double-click on macOS
-desktop/dist/win/JobFinder/            folder for Windows
-desktop/dist/JobFinder-Windows.zip     what you actually send  (~285 MB)
+desktop/dist/JobFinder-Windows.zip     what you send to a Windows machine (~299 MB)
 ```
+
+The Windows zip contains an installer, not just a folder:
+
+```
+Install JobFinder.bat      copies it in, makes the shortcuts, opens it
+Uninstall JobFinder.bat    removes the app, leaves the data
+shortcuts.ps1              called by the installer
+START HERE.txt
+JobFinder/                 the app itself, runnable directly if they prefer
+```
+
+It installs per-user into `%LOCALAPPDATA%\Programs\JobFinder`, so Windows never asks for
+an administrator — one fewer alarming prompt on software that is already going to trip
+SmartScreen. There is no Inno Setup step: that only runs on Windows, and this builds on a
+Mac.
 
 ## What the recipient does
 

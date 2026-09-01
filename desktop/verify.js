@@ -137,6 +137,13 @@ function verifyWin() {
   exists(path.join(R, 'app/server.js'), 'application server present');
   exists(path.join(R, 'app/.next/static'), 'static assets present');
   exists(path.join(OUT, 'win/START HERE.txt'), 'instructions included');
+  // The zip must contain the installer at its ROOT, not buried — the first thing the
+  // recipient sees after unzipping has to be the thing to double-click.
+  try {
+    const listing = execSync(`unzip -l "${path.join(OUT, 'JobFinder-Windows.zip')}"`).toString();
+    if (/Install JobFinder\.bat/.test(listing)) ok('installer is inside the zip');
+    else bad('installer is inside the zip');
+  } catch { bad('installer is inside the zip', 'could not read the zip'); }
 
   const exe = path.join(dir, 'JobFinder.exe');
   if (magic(exe) === 'pe') ok('launcher is a Windows executable');
@@ -158,6 +165,44 @@ function verifyWin() {
   ].find((p) => fs.existsSync(p));
   if (chrome && magic(chrome) === 'pe') ok('bundled Chromium is a Windows binary');
   else bad('bundled Chromium is a Windows binary', chrome ? `header says ${magic(chrome)}` : 'chrome.exe not found');
+
+  // The install experience. None of this can be run here, so it is checked by reading
+  // the files — and the things checked are the ones that fail silently on the
+  // recipient's machine and nowhere else.
+  const inst = path.join(OUT, 'win/Install JobFinder.bat');
+  const uninst = path.join(OUT, 'win/Uninstall JobFinder.bat');
+  const ps1 = path.join(OUT, 'win/shortcuts.ps1');
+  exists(inst, 'installer included');
+  exists(uninst, 'uninstaller included');
+  exists(ps1, 'shortcut script included');
+
+  for (const [f, label] of [[inst, 'installer'], [uninst, 'uninstaller'], [ps1, 'shortcut script']]) {
+    if (!fs.existsSync(f)) continue;
+    const text = fs.readFileSync(f, 'utf8');
+    const lines = text.split('\n').length - 1;
+    const crlf = (text.match(/\r\n/g) || []).length;
+    // A .bat with Unix line endings fails on cmd.exe in ways that are hard to read.
+    if (crlf === lines && lines > 0) ok(`${label} has Windows line endings`);
+    else bad(`${label} has Windows line endings`, `${crlf} of ${lines} lines`);
+  }
+
+  if (fs.existsSync(inst)) {
+    const text = fs.readFileSync(inst, 'utf8');
+    // robocopy returns 1 for "files copied" — treating that as failure would make a
+    // successful install report an error.
+    if (/errorlevel 8/.test(text)) ok('installer reads robocopy exit codes correctly');
+    else bad('installer reads robocopy exit codes correctly', 'any non-zero code would be treated as failure');
+    if (/taskkill \/IM JobFinder\.exe/.test(text)) ok('installer closes a running copy before copying');
+    else bad('installer closes a running copy before copying', 'locked files would half-copy');
+    if (!/powershell[^\n]*\$s\.TargetPath/.test(text)) ok('no inline PowerShell quoting in the .bat');
+    else bad('no inline PowerShell quoting in the .bat', 'nested quotes here are what broke the first attempt');
+  }
+
+  if (fs.existsSync(ps1)) {
+    const text = fs.readFileSync(ps1, 'utf8');
+    if (/Test-Path \$target/.test(text)) ok('shortcut script checks the target exists first');
+    else bad('shortcut script checks the target exists first', 'it would make a shortcut to nothing');
+  }
 
   const zip = path.join(OUT, 'JobFinder-Windows.zip');
   if (fs.existsSync(zip)) {

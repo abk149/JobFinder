@@ -479,7 +479,22 @@ async function buildWin() {
   const chrome = await stageChromium('win');
   if (chrome) copyDir(chrome, path.join(resources, 'chromium'));
 
-  fs.writeFileSync(path.join(outDir, 'START HERE.txt'), WIN_README);
+  // A real install, without needing an installer toolchain.
+  //
+  // Inno Setup and friends only run on Windows, and this builds on a Mac. A .bat that
+  // copies the folder into %LOCALAPPDATA% and makes shortcuts gets the same result for
+  // the person receiving it: they double-click one thing, and afterwards JobFinder is on
+  // the Start Menu and the desktop like any other app. It installs per-user, so Windows
+  // never asks for an administrator — one fewer scary prompt on software that is already
+  // going to trip SmartScreen.
+  //
+  // CRLF matters: a .bat with Unix line endings fails on older cmd.exe in ways that are
+  // hard to read, and this file is the first thing that runs on their machine.
+  const crlf = (t) => t.replace(/\r?\n/g, '\r\n');
+  fs.writeFileSync(path.join(outDir, 'Install JobFinder.bat'), crlf(WIN_INSTALLER), 'utf8');
+  fs.writeFileSync(path.join(outDir, 'Uninstall JobFinder.bat'), crlf(WIN_UNINSTALLER), 'utf8');
+  fs.writeFileSync(path.join(outDir, 'shortcuts.ps1'), crlf(WIN_SHORTCUTS), 'utf8');
+  fs.writeFileSync(path.join(outDir, 'START HERE.txt'), crlf(WIN_README));
 
   step('Zipping the Windows package');
   const zip = path.join(OUT, `${APP_NAME}-Windows.zip`);
@@ -493,19 +508,160 @@ async function buildWin() {
 const WIN_README = `JobFinder
 =========
 
-1. Unzip this folder somewhere permanent — Documents is fine. Not inside the Zip.
-2. Open the JobFinder folder and double-click JobFinder.exe.
-3. Right-click it and choose "Pin to taskbar" if you want it handy.
+INSTALLING
 
-The first launch installs a local AI runtime and downloads a 4.7 GB model. That takes
-a while and happens once; the window tells you what it is doing. Windows may ask you to
-approve the runtime installer.
+  1. Unzip this folder somewhere — Downloads is fine, it does not have to stay there.
+  2. Double-click "Install JobFinder.bat".
+  3. Windows may show a blue "Windows protected your PC" box, because this app is not
+     code-signed. Click "More info" then "Run anyway". It happens once.
 
-Everything stays on this machine. Your CV, your answers and your logins are never sent
-anywhere except to the job sites you are applying to.
+That copies JobFinder into your user folder, puts it on the Start Menu and the desktop,
+and opens it. No administrator password is needed, and you can delete the unzipped
+folder afterwards.
 
-Windows SmartScreen may warn that the publisher is unknown, because this app is not
-code-signed. Choose "More info" then "Run anyway".
+Prefer not to install? Open the JobFinder folder and run JobFinder.exe directly. It
+works exactly the same.
+
+FIRST RUN
+
+The first launch sets up a local AI assistant: it installs Ollama and downloads a 4.7 GB
+model. That takes a while and happens once — the window tells you what it is doing the
+whole time. Windows will ask you to approve the Ollama installer.
+
+Everything after that is instant.
+
+WHAT IT DOES WITH YOUR DATA
+
+Nothing leaves your machine, except to the job sites you are applying to. Your CV, your
+answers and your logins are stored under:
+
+    %APPDATA%\\JobFinder\\data
+
+Uninstalling does not touch that folder, so reinstalling keeps everything.
+
+REMOVING IT
+
+Double-click "Uninstall JobFinder.bat", or delete the folder from
+%LOCALAPPDATA%\\Programs\\JobFinder.
+`;
+
+const WIN_INSTALLER = `@echo off
+setlocal
+title Install JobFinder
+
+set "SRC=%~dp0JobFinder"
+set "DEST=%LOCALAPPDATA%\\Programs\\JobFinder"
+
+echo.
+echo   Installing JobFinder
+echo   ====================
+echo.
+
+if not exist "%SRC%\\JobFinder.exe" (
+  echo   ERROR: JobFinder.exe was not found next to this script.
+  echo   Unzip the whole download first, then run this from the unzipped folder.
+  echo.
+  pause
+  exit /b 1
+)
+
+rem Close a running copy, otherwise the files are locked and the copy half-fails.
+taskkill /IM JobFinder.exe /F >nul 2>&1
+
+echo   Copying files to:
+echo     %DEST%
+echo   (about 700 MB, this takes a minute)
+echo.
+if not exist "%DEST%" mkdir "%DEST%" >nul 2>&1
+robocopy "%SRC%" "%DEST%" /E /NFL /NDL /NJH /NJS /NP /R:1 /W:1 >nul
+rem robocopy exit codes below 8 are success. Anything else is a real failure.
+if errorlevel 8 (
+  echo   ERROR: copying failed. Is there enough disk space?
+  echo.
+  pause
+  exit /b 1
+)
+
+echo   Creating shortcuts...
+powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0shortcuts.ps1" >nul 2>&1
+
+echo.
+echo   Done. JobFinder is on your desktop and in the Start Menu.
+echo.
+echo   The first launch installs a local AI model (4.7 GB, once) and will
+echo   ask you to approve the Ollama installer. Leave it running.
+echo.
+start "" "%DEST%\\JobFinder.exe"
+timeout /t 4 >nul
+endlocal
+`;
+
+// Shortcut creation lives in its own file rather than inline in the .bat.
+//
+// Inline it needs quotes nested three deep — cmd's, PowerShell's, and the string's —
+// and the first attempt lost a level of escaping to the template literal, which would
+// have produced a script that fails on the recipient's machine and nowhere else. A
+// separate file has no quoting problem to get wrong.
+const WIN_SHORTCUTS = `$ErrorActionPreference = 'Stop'
+$target = Join-Path $env:LOCALAPPDATA 'Programs\\JobFinder\\JobFinder.exe'
+$workdir = Join-Path $env:LOCALAPPDATA 'Programs\\JobFinder'
+
+if (-not (Test-Path $target)) {
+  Write-Host "JobFinder.exe not found at $target"
+  exit 1
+}
+
+$shell = New-Object -ComObject WScript.Shell
+$places = @(
+  (Join-Path ([Environment]::GetFolderPath('Desktop')) 'JobFinder.lnk'),
+  (Join-Path $env:APPDATA 'Microsoft\\Windows\\Start Menu\\Programs\\JobFinder.lnk')
+)
+
+foreach ($p in $places) {
+  $s = $shell.CreateShortcut($p)
+  $s.TargetPath = $target
+  $s.WorkingDirectory = $workdir
+  $s.Description = 'JobFinder - find and apply to jobs'
+  $s.Save()
+}
+
+Write-Host 'Shortcuts created.'
+`;
+
+const WIN_UNINSTALLER = `@echo off
+setlocal
+title Uninstall JobFinder
+
+set "DEST=%LOCALAPPDATA%\\Programs\\JobFinder"
+
+echo.
+echo   This removes the JobFinder application.
+echo.
+echo   Your data - CV, answers, logins, saved jobs - stays in
+echo     %APPDATA%\\JobFinder
+echo   so reinstalling picks up where you left off.
+echo.
+choice /C YN /M "   Remove JobFinder"
+if errorlevel 2 goto :cancelled
+
+taskkill /IM JobFinder.exe /F >nul 2>&1
+timeout /t 2 >nul
+if exist "%DEST%" rmdir /S /Q "%DEST%"
+del "%USERPROFILE%\\Desktop\\JobFinder.lnk" >nul 2>&1
+del "%APPDATA%\\Microsoft\\Windows\\Start Menu\\Programs\\JobFinder.lnk" >nul 2>&1
+
+echo.
+echo   Removed. To delete your data as well, delete this folder:
+echo     %APPDATA%\\JobFinder
+echo.
+pause
+exit /b 0
+
+:cancelled
+echo.
+echo   Nothing was changed.
+echo.
+pause
 `;
 
 // ── Go ──────────────────────────────────────────────────────────────────────
